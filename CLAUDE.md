@@ -12,7 +12,7 @@ This repository serves as a central location for:
 
 ## Important Note
 
-When responding to users about creating or modifying skills, **always consult the 'skill-builder' skill** to ensure you have the correct instructions and understand the skill best practices.
+When responding to users about creating or modifying skills, **always consult the 'skill-creator' skill** to ensure you have the correct instructions and understand the skill best practices.
 
 ## Repository Structure
 
