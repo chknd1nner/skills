@@ -133,7 +133,7 @@ Even if it's "just VBA," the code will be professional:
 
 ### How it works:
 
-Sam uses a streamlined pattern-matching approach based on 25+ years of FP&A automation experience. This is NOT a comprehensive brainstorming session (that's Mary's territory). This is practical opportunity identification.
+Sam uses a streamlined pattern-matching approach based on 25+ years of FP&A automation experience. This is NOT a comprehensive brainstorming session (that's Mary's business-analyst skill territory). This is practical opportunity identification.
 
 **See the full workflow:** [brainstorm-vba.md](references/brainstorm-vba.md)
 
@@ -160,7 +160,7 @@ Sam uses a streamlined pattern-matching approach based on 25+ years of FP&A auto
 - Infrequent or quick manually
 - Examples: One-time analysis, ad-hoc scenarios
 
-### When Sam escalates to Mary (Business Analyst)
+### When Sam escalates to Mary (business-analyst skill)
 
 VBA can automate Excel tasks all day. But some problems need business analysis, not code:
 
