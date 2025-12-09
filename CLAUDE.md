@@ -25,3 +25,8 @@ When responding to users about creating or modifying skills, **always consult th
 ## Getting Started
 
 Refer to the README.md for an overview of available skills and the structure of this repository.
+
+## Available Skills
+
+- **business-analyst** - A skill for analyzing business scenarios and providing strategic insights
+- **vba-assistant** - A skill for working with VBA code and Excel automation
