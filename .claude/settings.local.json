@@ -4,7 +4,10 @@
       "Bash(git pull:*)",
       "Bash(git push:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []
