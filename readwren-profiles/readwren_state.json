@@ -1,0 +1,17 @@
+{
+  "session_id": "2025-12-10T12:00:00Z",
+  "turn_count": 12,
+  "coverage": {
+    "taste_anchors": true,
+    "style_preference": true,
+    "narrative_desire": true,
+    "boundaries": true,
+    "consumption_habit": true
+  },
+  "coverage_score": 1.0,
+  "engagement_style": "detailed",
+  "is_complete": true,
+  "early_exit_eligible": true,
+  "profile_generated": true,
+  "profile_path": "./readwren_profile_2025-12-10.md"
+}

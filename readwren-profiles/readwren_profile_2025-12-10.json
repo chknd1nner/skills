@@ -1,0 +1,69 @@
+{
+  "reader_archetype": "Inner Dragon Slayer",
+
+  "taste_anchors": {
+    "loves": ["Flowers for Algernon", "Normal People", "A Wizard of Earthsea"],
+    "hates": ["Wicked"],
+    "inferred_genres": ["Contemporary romance", "Literary fiction with psychological depth", "Character-driven fantasy", "Enemies-to-lovers romance"]
+  },
+
+  "style_signature": {
+    "prose_density": 55,
+    "pacing": 55,
+    "tone": 58,
+    "worldbuilding": 35,
+    "character_focus": 88
+  },
+
+  "narrative_desires": {
+    "wish": "A story with a wounded, masked male protagonist who confronts his inner turmoil, is finally seen by someone who once overlooked him, and emerges transformed through earned catharsis—inner dragons slayed, lovers united.",
+    "preferred_ending": "hopeful",
+    "themes": [
+      "Internal conflict and masked vulnerability",
+      "Being truly seen after being invisible",
+      "Mentor-apprentice relationships",
+      "Accountability and facing one's shadow",
+      "Enemies to lovers with power reversal",
+      "Transformation through confronting truth",
+      "Growth over revenge"
+    ]
+  },
+
+  "consumption": {
+    "daily_time_minutes": 45,
+    "delivery_frequency": "binge",
+    "pages_per_delivery": 35
+  },
+
+  "implicit": {
+    "vocabulary_richness": 0.78,
+    "response_brevity_score": 0.38,
+    "engagement_index": 0.88
+  },
+
+  "explanations": {
+    "prose_density": "You appreciate prose with psychological weight—the kind that lets you inside a character's head—but you don't need maximalist density. Sally Rooney's interiority works for you; Pynchon probably wouldn't. You want clarity that serves depth, not complexity for its own sake.",
+
+    "pacing": "You need momentum with purpose. Pure slow-burn frustrates you if nothing is happening, but you also value the 'whole story leading to that moment'—the buildup that makes catharsis feel earned. When a book hooks you, you devour it in a weekend. When it doesn't, two attempts might not be enough.",
+
+    "tone": "You're drawn to serious emotional stakes—tragedy, wound, the toll of masking—but you're a self-described 'softy' who wants the hero to triumph. Bittersweet is fine if the sacrifice matters; meaningless darkness isn't. You want the shadows, but you want them slayed.",
+
+    "worldbuilding": "Worldbuilding alone won't carry you. Wicked had interesting world construction but left you cold without interiority. You'll appreciate a well-built world as backdrop, but only if there's a rich inner landscape to explore within it.",
+
+    "character_focus": "This is your core. You read for interiority—that 'delicious contrast' between what characters perform and what they hide. You want access to the mask AND what's underneath. Connell's anxiety, Ged's shame, the wound that hasn't healed. Plot serves character for you, never the reverse.",
+
+    "vocabulary_richness": "You speak with literary precision: 'interiority', 'cathartic', 'schadenfreude', 'performative action'. You're comfortable with abstract concepts and use them naturally. This suggests you can handle—and likely prefer—books that trust readers with sophisticated emotional vocabulary.",
+
+    "engagement_level": "You engaged deeply throughout, offering specific scenes, personal connections, and self-reflective insights. You pitched your ideal book in vivid detail. You're a reader who thinks about why things work, not just whether they do.",
+
+    "reading_philosophy": "You read to witness transformation earned through struggle. The hero who faces their shadow—literally, in Ged's case—and emerges changed. You're bridging your fantasy roots with contemporary fiction, looking for the same emotional mechanics in living rooms instead of battlefields. And you want to share that journey with your sons, passing on not just books but the love of stories that matter.",
+
+    "anti_patterns": "Avoid: slow pacing without payoff; investment in characters who get dropped or killed without meaning; interiority that's inaccessible or withheld; worldbuilding that substitutes for psychological depth; tragic endings that feel pointless rather than heroic; one-dimensional male characters who don't grow."
+  },
+
+  "_metadata": {
+    "interview_turns": 12,
+    "completion_status": "complete",
+    "timestamp": "2025-12-10T00:00:00.000Z"
+  }
+}
