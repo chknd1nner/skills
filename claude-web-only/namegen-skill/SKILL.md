@@ -1,6 +1,6 @@
 ---
 name: namegen
-description: Generate culturally-themed character names for fiction. Supports realistic names (authentic, locale-based) and synthetic names (Markov-generated, novel-but-plausible). Invoke when user needs character names, NPC names, or when developing story concepts that require naming.
+description: Generate character names for fiction. Supports realistic names (authentic, locale-based) and synthetic names (Markov-generated, novel-but-plausible). Use when you or the user needs character names, NPC names, or when developing story concepts that require characters to be named.
 ---
 
 # Purpose
