@@ -98,6 +98,17 @@ def is_slop(name: str) -> bool:
     return name.lower() in SLOP_NAMES
 
 
+def romanize_name(name: str) -> str:
+    """Convert non-Latin script names to romanized (Latin alphabet) form."""
+    from unidecode import unidecode
+    return unidecode(name)
+
+
+def romanize_name_parts(name_parts: dict) -> dict:
+    """Romanize all parts of a name dictionary."""
+    return {key: romanize_name(value) for key, value in name_parts.items()}
+
+
 def generate_realistic(culture: str, gender: str, components: list[str]) -> dict:
     """Generate a realistic name using Faker."""
     from faker import Faker
@@ -264,6 +275,8 @@ Examples:
                         help="Output names only, no metadata")
     parser.add_argument("--no-filter", action="store_true",
                         help="Disable anti-slop filtering")
+    parser.add_argument("--romanize", "-r", action="store_true",
+                        help="Convert non-Latin names to romanized (Latin alphabet) form")
     parser.add_argument("--list-cultures", action="store_true",
                         help="List available cultures/datasets and exit")
     
@@ -292,6 +305,11 @@ Examples:
                 components=components,
                 filter_slop=not args.no_filter
             )
+
+            # Apply romanization if requested
+            if args.romanize:
+                name_parts = romanize_name_parts(name_parts)
+
             full_name = format_full_name(name_parts, components)
             results.append({
                 "name": full_name,

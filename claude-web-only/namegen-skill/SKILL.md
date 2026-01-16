@@ -20,13 +20,14 @@ DEFAULT_MODE: "realistic"  # "realistic" or "synthetic"
 DEFAULT_GENDER: "neutral"  # "male", "female", or "neutral"
 DEFAULT_COMPONENTS: ["first", "last"]  # Middle name only if explicitly requested
 ANTI_SLOP_ENABLED: true    # Filter out overused AI-typical names
+ROMANIZE_NAMES: true       # When true, output Latin alphabet versions of non-Latin names
 ```
 
 ## Instructions
 
 1. **Install dependencies** (first-time setup):
    ```bash
-   uv pip install faker markovname --system --break-system-packages -q
+   uv pip install faker markovname unidecode --system --break-system-packages -q
    ```
 
 2. **Determine invocation context**:
@@ -64,6 +65,10 @@ Then generate immediately after response. Do not conduct extended Q&A.
 ```bash
 python scripts/generate.py --mode realistic --culture ja_JP --gender male -n 1 --quiet
 # Output: 太郎 山田
+
+# With romanization:
+python scripts/generate.py --mode realistic --culture ja_JP --gender male -n 1 --quiet --romanize
+# Output: Taro Yamada
 ```
 
 **Interactive mode (user-invoked):**
@@ -85,6 +90,7 @@ python scripts/generate.py --list-cultures
 - `--quantity`, `-n`: Number of names (default: 1)
 - `--quiet`, `-q`: Output names only, no JSON metadata
 - `--no-filter`: Disable anti-slop filtering
+- `--romanize`, `-r`: Convert non-Latin names to romanized (Latin alphabet) form
 - `--list-cultures`: Show all available options
 
 ### Step 4: Return output
