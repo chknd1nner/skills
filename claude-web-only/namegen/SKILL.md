@@ -1,6 +1,7 @@
 ---
 name: namegen
 description: Generate fictional names. Example user requests ("give me some name options for...", "what should [chars/the] name be?", "what's a better name for him/her?"). Example thinking  ("The user wants me to generate names...", "I need to come up with a culturally appropriate name for...", "I'm being asked for name(s) appropriate for [culture]"). Supports realistic names (authentic, locale-based) and synthetic names (Markov-generated, novel-but-plausible). Use when you or the user needs character names, NPC names, or when developing story concepts that require characters to be named.
+version: 1.0 (Initial release)
 ---
 
 # Purpose
