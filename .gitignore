@@ -47,3 +47,4 @@ venv.bak/
 *.zip
 .env
 .env.local
+readwren-profiles/
