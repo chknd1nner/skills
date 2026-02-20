@@ -30,9 +30,33 @@ skills/
 
 ## Available Skills
 
-Currently, the following skills are available:
+### Claude Code Only
 
-*(None yet - add skills as they are created)*
+| Skill | Description |
+|-------|-------------|
+| [youtube-to-markdown](./claude-code-only/youtube-to-markdown/) | Extracts YouTube video metadata, transcripts, subtitles, captions, and comments into structured markdown files. Supports channel browsing. |
+
+### Claude.ai Only
+
+| Skill | Description |
+|-------|-------------|
+| [business-analyst](./claude-web-only/business-analyst/) | Strategic business analysis and requirements elicitation. Research market opportunities, brainstorm ideas, and create product briefs. |
+| [fetch-reddit](./claude-web-only/fetch-reddit/) | Fetches Reddit content (posts, comments, subreddits) directly, bypassing web search limitations. |
+| [namegen](./claude-web-only/namegen/) | Generates fictional names by culture/nationality for fiction writing. Supports realistic and synthetic (Markov-generated) modes. |
+| [vba-assistant](./claude-web-only/vba-assistant/) | VBA programming and Excel automation assistance for FP&A professionals. Macros, debugging, Workday/Salesforce integration. |
+
+### Common (Both Platforms)
+
+| Skill | Description |
+|-------|-------------|
+| [readwren](./common/readwren/) | Conducts adaptive 12-turn literary interviews to build detailed reader profiles and personalized book recommendations. |
+| [regex-file-editor](./common/regex-file-editor/) | Token-efficient regex-based file editing with custom backreferences, ambiguity detection, and multi-file search. |
+
+### Work in Progress
+
+| Skill | Description |
+|-------|-------------|
+| [readwren (standalone)](./work-in-progress/readwren/) | Standalone Python/LangGraph version of the ReadWren interviewer with Redis session persistence. |
 
 ## Getting Started
 
