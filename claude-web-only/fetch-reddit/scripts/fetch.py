@@ -20,7 +20,21 @@ try:
     from curl_cffi import requests
 except ImportError:
     import subprocess
-    subprocess.run([sys.executable, "-m", "pip", "install", "curl_cffi", "--break-system-packages", "-q"])
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "curl_cffi", "--break-system-packages", "-q"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print(
+            "ERROR: Failed to install required dependency 'curl_cffi'.\n"
+            f"pip exited with code {result.returncode}.\n"
+            f"{result.stderr.strip()}\n\n"
+            "This may be caused by a network issue (e.g. blocked request or 403 from PyPI), "
+            "a permissions problem, or an incompatible Python environment. "
+            "Try running `pip install curl_cffi` manually to diagnose.",
+            file=sys.stderr
+        )
+        sys.exit(1)
     from curl_cffi import requests
 
 # ── Constants ─────────────────────────────────────────────────────────────────

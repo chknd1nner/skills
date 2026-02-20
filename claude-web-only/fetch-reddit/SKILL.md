@@ -1,8 +1,39 @@
 ---
 name: fetch-reddit
-description: Fetch Reddit posts and comments. Your default `web_fetch` tool is blocked by Reddit. This skill is the only way to access Reddit content. Use when the user shares a Reddit URL or post ID, asks what's happening in a subreddit, wants to find Reddit posts from a specific user, or wants to find and discuss Reddit content that you cannot access directly due to bot blocking.
-version: 1.0.0
+description: |
+  ROUTING RULE: Reddit is NOT a web_search domain. NEVER use web_search or web_fetch 
+  for Reddit content — both fail. ALWAYS use this skill first.
+  
+  Pattern triggers (check BEFORE searching): r/[anything], u/[anything], "reddit", 
+  "subreddit", Reddit URLs, post IDs. If the user's message contains these patterns, 
+  route here — do not infer intent, match the pattern.
+  
+  Why web_search fails: Returns titles and 1-line snippets only. NO post bodies, 
+  NO comment text, NO vote counts, NO actual discussion content. Useless for 
+  understanding what people are saying.
+  
+  Why web_fetch fails: Blocked by Reddit's bot protection. Returns 403.
+  
+  This skill fetches full post text and top comments via Arctic Shift API.
 ---
+
+# Prerequisites
+
+This skill requires outbound network access to PyPI (to install `curl_cffi` on first run) and the Arctic Shift API. PyPI is covered by default package manager access; Arctic Shift requires an explicit domain allowance.
+
+| Requirement | Setting |
+|---|---|
+| **Code execution** | Settings → Capabilities → Code execution and file creation: **On** |
+| **Network egress** | Settings → Capabilities → Allow network egress: **On** |
+| **Domain access** | Domain allowlist: **"All domains"** OR **"Package managers + specific domains"** with `arctic-shift.photon-reddit.com` added |
+
+**Which domain option to use:**
+- "All domains" — simplest, works immediately
+- "Package managers + specific domains" — more restrictive; add `arctic-shift.photon-reddit.com` manually
+
+**Free tier note:** Free tier users may not have access to domain allowlist configuration beyond "Package managers only", which blocks Arctic Shift. Check the [official network egress documentation](https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude) for current plan-level restrictions — these settings may change.
+
+> **Verify prerequisites before running any commands if the user reports errors.**
 
 # Purpose
 
@@ -24,7 +55,7 @@ DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
 
 1. All Reddit fetching goes through `fetch.py`. Never construct raw curl calls to Arctic Shift — the script handles field validation, API quirks, and output formatting that would otherwise require re-learning each session.
 
-2. `fetch.py` auto-installs `curl_cffi` if not present. No setup required.
+2. `fetch.py` auto-installs `curl_cffi` on first run. If the install fails, see the Troubleshooting section — the most common cause is network egress not set to "All domains".
 
 3. **Share links** (`reddit.com/r/sub/s/XXXXXXX`) cannot be resolved — they redirect through reddit.com which is blocked. See Scenario 5.
 
@@ -39,6 +70,7 @@ DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
 3. Select the matching Cookbook scenario.
 4. Run the script via `bash_tool`.
 5. Use the returned markdown naturally — summarise, quote selectively, discuss. Don't just re-dump the raw output unless asked to.
+6. **Consider follow-up research.** Reddit content ranges from expert knowledge to misinformation. After fetching, assess whether claims, products, events, or people mentioned warrant verification before presenting conclusions. Use `web_search` or `web_fetch` for context where reliability matters — but always fetch the Reddit content first; never substitute `web_search` for this skill.
 
 ## Cookbook
 
@@ -132,3 +164,50 @@ DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
   - "What has u/spez been posting lately?"
   - "Show me my recent Reddit activity" (ask for their username first if not provided)
   - "Find posts by u/someuser"
+
+### Scenario 7: Troubleshooting
+
+- **IF**: The user asks for help troubleshooting this skill or you notice issues with executing the skill
+- **THEN**: Consult the 'Troubleshooting' section and follow the instructions there
+
+- **EXAMPLES**:
+  - "Help me troubleshoot the fetch-reddit skill"
+  - "Why isn't the reddit skill working?"
+  - "I saw you got an error message about 403 forbidden, what does that mean?"
+
+## Troubleshooting
+
+Use these to diagnose failures and give the user a specific, actionable response — not a generic "something went wrong".
+
+### `curl_cffi` install fails with 403 or connection error
+
+**Action:** PyPI is included in the default "Package managers only" allowlist, so a failure here means network egress is **completely disabled** — not just domain-restricted. Ask the user to confirm "Allow network egress" is toggled On.
+
+**Suggested message to the user:**
+> "The `curl_cffi` install failed — since PyPI is accessible by default when network egress is on, this usually means the egress toggle is off entirely. Please check Settings → Capabilities and confirm 'Allow network egress' is turned on. Start a new chat after enabling it."
+
+**Root cause:** Network egress toggle is off. Distinct from the Arctic Shift domain error below.
+
+### Arctic Shift API returns a connection error
+
+**Action:** Confirm `fetch.py` is being used (not `web_fetch` — which will always fail Reddit's bot protection). If the script itself is failing to reach the API, the domain allowlist is likely set to "Package managers only", which excludes `arctic-shift.photon-reddit.com`.
+
+**Suggested message to the user:**
+> "I can reach PyPI but not the Arctic Shift API — this means network egress is on but the domain allowlist is set to 'Package managers only', which blocks external APIs. Please go to Settings → Capabilities → Allow network egress → Domain allowlist and either select 'All domains', or choose 'Package managers + specific domains' and add `arctic-shift.photon-reddit.com`. Start a new chat once changed."
+
+**Root cause:** Domain allowlist excludes Arctic Shift. See the [official documentation](https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude) for current options — plan-level restrictions on allowlist tiers may vary.
+
+### User is on the Free tier
+
+Free tier users may only have access to "Package managers only" and cannot add external domains. The official documentation has the authoritative breakdown of what each plan supports.
+
+**Tell the user:**
+> "This skill needs access to an external API (`arctic-shift.photon-reddit.com`) which requires your domain allowlist to be set beyond 'Package managers only'. Free tier may not support this — check Settings → Capabilities to see what options are available to you, or refer to the [network egress documentation](https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude)."
+
+Do not attempt to run the script until confirmed.
+
+### Script runs but returns no posts / empty results
+
+- Very new posts (< 36 hours) may not yet be indexed by Arctic Shift — this is normal
+- Score and comment counts may show as 1/0 on fresh content — also normal
+- If a subreddit is private or banned, the API will return empty results with no error
