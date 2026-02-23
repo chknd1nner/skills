@@ -84,14 +84,49 @@ DEFAULT_COMMENT_LIMIT = 20  # return this many to LLM unless --limit passed
 DEFAULT_POST_LIMIT = 25
 
 REDLIB_INSTANCES = [
-    "https://redlib.tiekoetter.com",
-    "https://safereddit.com",
-    "https://redlib.zaggy.nl",
-    "https://red.artemislena.eu",
-    "https://l.opnxng.com",
+    "https://redlib.freedit.eu",
 ]
 
 REDLIB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+_instances_fetched = False
+
+
+def fetch_redlib_instances():
+    """Fetch current Redlib instance list from the official registry. Returns URL list or None on error."""
+    try:
+        r = std_requests.get(
+            "https://raw.githubusercontent.com/redlib-org/redlib-instances/main/instances.json",
+            timeout=5,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return [
+            entry["url"]
+            for entry in data.get("instances", [])
+            if entry.get("url", "").startswith("https://")
+        ]
+    except Exception:
+        return None
+
+
+def get_redlib_instances():
+    """Return the current instance list, fetching from the registry on first call."""
+    global _instances_fetched
+    if _instances_fetched:
+        return REDLIB_INSTANCES
+    fetched = fetch_redlib_instances()
+    if fetched:
+        # Prepend any hardcoded entries not already in the fetched list (preserves
+        # manually-confirmed instances that may not be in the official registry)
+        fetched_set = set(fetched)
+        extra = [u for u in REDLIB_INSTANCES if u not in fetched_set]
+        REDLIB_INSTANCES[:] = extra + fetched
+    else:
+        print("WARNING: Could not refresh Redlib instance list from GitHub; using fallback.", file=sys.stderr)
+    _instances_fetched = True
+    return REDLIB_INSTANCES
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -166,7 +201,7 @@ def redlib_get(path):
     session.headers['User-Agent'] = REDLIB_UA
 
     errors = []
-    for base in REDLIB_INSTANCES:
+    for base in get_redlib_instances():
         url = f"{base}{path}"
         try:
             r = solve_anubis(session, url)
