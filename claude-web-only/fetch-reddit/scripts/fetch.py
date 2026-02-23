@@ -487,29 +487,76 @@ def _print_comments(post_id, limit):
 
 
 def cmd_browse(args):
-    data = get(f"{BASE}/api/posts/search", {
+    params = {
         "subreddit": args.subreddit,
         "sort": "desc",
         "limit": args.limit,
         "fields": SEARCH_FIELDS,
-    })
+    }
+    if args.flair:
+        params["link_flair_text"] = args.flair
+    if args.after:
+        params["after"] = args.after
+    if args.before:
+        params["before"] = args.before
+    if args.nsfw:
+        params["over_18"] = "true"
+    if args.author:
+        params["author"] = args.author
+
+    data = get(f"{BASE}/api/posts/search", params)
     posts = data.get("data", [])
     if not posts:
         print(f"No posts found in r/{args.subreddit}")
         return
-    print(f"# r/{args.subreddit} — {len(posts)} recent posts\n")
+
+    # Build header with active filters
+    filters = []
+    if args.flair:
+        filters.append(f"flair: {args.flair}")
+    if args.after:
+        filters.append(f"after: {args.after}")
+    if args.before:
+        filters.append(f"before: {args.before}")
+    filter_str = f" ({', '.join(filters)})" if filters else ""
+
+    print(f"# r/{args.subreddit} — {len(posts)} recent posts{filter_str}\n")
     for p in posts:
         _print_post_digest(p)
 
+    # Pagination hint
+    if len(posts) == args.limit:
+        last_ts = posts[-1].get("created_utc")
+        if last_ts:
+            print(f"<!-- next_page: --before {last_ts} -->")
+
 
 def cmd_search(args):
-    data = get(f"{BASE}/api/posts/search", {
+    params = {
         "subreddit": args.subreddit,
-        "query": args.keywords,
         "sort": "desc",
         "limit": args.limit,
         "fields": SEARCH_FIELDS,
-    })
+    }
+
+    # Determine search mode
+    if args.title_only:
+        params["title"] = args.keywords
+    elif args.body_only:
+        params["selftext"] = args.keywords
+    else:
+        params["query"] = args.keywords
+
+    if args.flair:
+        params["link_flair_text"] = args.flair
+    if args.after:
+        params["after"] = args.after
+    if args.before:
+        params["before"] = args.before
+    if args.author:
+        params["author"] = args.author
+
+    data = get(f"{BASE}/api/posts/search", params)
     posts = data.get("data", [])
     if not posts:
         print(f"No posts found in r/{args.subreddit} matching '{args.keywords}'")
@@ -517,6 +564,12 @@ def cmd_search(args):
     print(f"# Search: '{args.keywords}' in r/{args.subreddit} — {len(posts)} results\n")
     for p in posts:
         _print_post_digest(p)
+
+    # Pagination hint
+    if len(posts) == args.limit:
+        last_ts = posts[-1].get("created_utc")
+        if last_ts:
+            print(f"<!-- next_page: --before {last_ts} -->")
 
 
 def _print_post_digest(p):
@@ -535,12 +588,18 @@ def _print_post_digest(p):
 def cmd_user(args):
     print(f"# u/{args.username} — Recent activity\n")
 
-    posts = get(f"{BASE}/api/posts/search", {
+    post_params = {
         "author": args.username,
         "sort": "desc",
         "limit": args.limit,
         "fields": SEARCH_FIELDS,
-    }).get("data", [])
+    }
+    if args.after:
+        post_params["after"] = args.after
+    if args.before:
+        post_params["before"] = args.before
+
+    posts = get(f"{BASE}/api/posts/search", post_params).get("data", [])
     if posts:
         print(f"## Posts ({len(posts)})\n")
         for p in posts:
@@ -549,12 +608,18 @@ def cmd_user(args):
             print(f"  `{p['id']}` — https://reddit.com{permalink}")
             print()
 
-    comments = get(f"{BASE}/api/comments/search", {
+    comment_params = {
         "author": args.username,
         "sort": "desc",
         "limit": args.limit,
         "fields": COMMENT_FIELDS,
-    }).get("data", [])
+    }
+    if args.after:
+        comment_params["after"] = args.after
+    if args.before:
+        comment_params["before"] = args.before
+
+    comments = get(f"{BASE}/api/comments/search", comment_params).get("data", [])
     if comments:
         print(f"## Comments ({len(comments)})\n")
         for c in comments:
@@ -658,17 +723,30 @@ def main():
     p_browse.add_argument("subreddit")
     p_browse.add_argument("--limit", type=int, default=DEFAULT_POST_LIMIT,
                           help=f"Number of posts (default: {DEFAULT_POST_LIMIT})")
+    p_browse.add_argument("--flair", help="Filter by flair (exact match)")
+    p_browse.add_argument("--after", help="Posts after this time (e.g., 7d, 2024-01-01)")
+    p_browse.add_argument("--before", help="Posts before this time")
+    p_browse.add_argument("--nsfw", action="store_true", help="Include NSFW posts")
+    p_browse.add_argument("--author", help="Filter by author")
 
     p_search = sub.add_parser("search", help="Search posts by keyword in a subreddit")
     p_search.add_argument("subreddit")
     p_search.add_argument("keywords")
     p_search.add_argument("--limit", type=int, default=DEFAULT_POST_LIMIT,
                           help=f"Number of results (default: {DEFAULT_POST_LIMIT})")
+    p_search.add_argument("--title-only", action="store_true", help="Search titles only")
+    p_search.add_argument("--body-only", action="store_true", help="Search post bodies only")
+    p_search.add_argument("--flair", help="Filter by flair (exact match)")
+    p_search.add_argument("--after", help="Posts after this time")
+    p_search.add_argument("--before", help="Posts before this time")
+    p_search.add_argument("--author", help="Filter by author")
 
     p_user = sub.add_parser("user", help="Fetch a user's recent posts and comments")
     p_user.add_argument("username")
     p_user.add_argument("--limit", type=int, default=DEFAULT_POST_LIMIT,
                         help=f"Number of each (default: {DEFAULT_POST_LIMIT})")
+    p_user.add_argument("--after", help="Activity after this time")
+    p_user.add_argument("--before", help="Activity before this time")
 
     p_live_browse = sub.add_parser("live-browse", help="Browse real-time posts via Redlib")
     p_live_browse.add_argument("subreddit")
