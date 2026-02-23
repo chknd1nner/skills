@@ -26,11 +26,12 @@ This skill requires outbound network access to PyPI (to install dependencies on 
 |---|---|
 | **Code execution** | Settings → Capabilities → Code execution and file creation: **On** |
 | **Network egress** | Settings → Capabilities → Allow network egress: **On** |
-| **Domain access** | Domain allowlist: **"All domains"** OR **"Package managers + specific domains"** with `arctic-shift.photon-reddit.com`, `redlib.tiekoetter.com`, `safereddit.com`, `redlib.zaggy.nl`, `red.artemislena.eu`, `l.opnxng.com` added |
+| **Domain access** | Domain allowlist: **"All domains"** OR **"Package managers + specific domains"** with `arctic-shift.photon-reddit.com` and `raw.githubusercontent.com` added |
 
 **Which domain option to use:**
 - "All domains" — simplest, works immediately
 - "Package managers + specific domains" — more restrictive; add domains listed above manually
+- On the **first `live-*` command** each chat session, the script fetches the current Redlib instance list from `raw.githubusercontent.com` (~1s, one-time). If unreachable, it falls back to a bundled list automatically.
 
 **Free tier note:** Free tier users may not have access to domain allowlist configuration beyond "Package managers only", which blocks both Arctic Shift and Redlib. Check the [official network egress documentation](https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude) for current plan-level restrictions.
 
