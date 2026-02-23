@@ -171,7 +171,17 @@ def redlib_get(path):
         try:
             r = solve_anubis(session, url)
             if r.status_code == 200 and "anubis" not in r.text.lower()[:500]:
-                return BeautifulSoup(r.text, "html.parser"), base
+                soup = BeautifulSoup(r.text, "html.parser")
+                title = soup.find("title")
+                title_text = title.get_text(strip=True) if title else ""
+                error_indicators = [
+                    "backend temporarily unavailable",
+                    "failed to parse page json",
+                ]
+                if any(ind in title_text.lower() for ind in error_indicators):
+                    errors.append(f"{base}: Redlib error — {title_text}")
+                    continue
+                return soup, base
             errors.append(f"{base}: got Anubis page despite solving")
         except Exception as e:
             errors.append(f"{base}: {e}")
