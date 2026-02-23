@@ -568,10 +568,80 @@ def cmd_user(args):
             print(f"  Post: `{post_id}`")
             print()
 
+# ── Redlib (live) subcommands ─────────────────────────────────────────────────
+
+def cmd_live_browse(args):
+    sort = args.sort or "hot"
+    path = f"/r/{args.subreddit}/{sort}"
+    soup, base_url = redlib_get(path)
+    posts = parse_redlib_posts(soup)
+    if not posts:
+        print(f"No posts found in r/{args.subreddit} (live). Redlib HTML may have changed or the subreddit may not exist.")
+        return
+    print(f"# r/{args.subreddit} — {len(posts)} {sort} posts (live via Redlib)\n")
+    for p in posts:
+        flair = f" [{p['link_flair_text']}]" if p.get("link_flair_text") else ""
+        nsfw = " 🔞" if p.get("over_18") else ""
+        pin = " 📌" if p.get("stickied") else ""
+        preview = ""
+        if p.get("body_preview"):
+            snippet = p["body_preview"][:200].replace("\n", " ")
+            preview = f"\n  > {snippet}{'…' if len(p['body_preview']) > 200 else ''}"
+        print(f"- **{p['title']}**{flair}{nsfw}{pin} | u/{p['author']} | ↑{p['score']} | {p['num_comments']} comments | {p['time_relative']}")
+        print(f"  `{p['id']}` — {base_url}{p.get('permalink', '')}{preview}")
+        print()
+
+
+def cmd_live_post(args):
+    post_id = args.post_id.removeprefix("t3_")
+    path = f"/comments/{post_id}"
+    soup, base_url = redlib_get(path)
+    post = parse_redlib_post_detail(soup)
+    if not post:
+        print(f"Could not parse post {post_id} from Redlib. HTML structure may have changed.")
+        return
+
+    nsfw = " 🔞 NSFW" if post.get("over_18") else ""
+    flair = f" | **Flair:** {post['link_flair_text']}" if post.get("link_flair_text") else ""
+    ratio = f" | **Upvoted:** {post.get('upvote_ratio', 'N/A')}" if post.get("upvote_ratio") else ""
+
+    print(f"## {post['title']}{nsfw}")
+    print(f"**ID:** {post['id']} | **Author:** u/{post['author']} | **r/{post['subreddit']}**{flair}")
+    print(f"**Score:** {post['score']} | **Comments:** {post['num_comments']} | **Posted:** {post['time_relative']}{ratio}")
+    print(f"**Source:** {base_url}/comments/{post_id}")
+
+    if post.get("body"):
+        print(f"\n{post['body']}")
+
+    if args.comments is not None:
+        print()
+        comments, total = parse_redlib_comments(soup, args.comments)
+        if comments:
+            print(f"---\n### Top {len(comments)} Comments (from {total} parsed, sorted by score)\n")
+            for block in comments:
+                print(block)
+                print()
+        else:
+            print("*No comments found.*")
+
+
+def cmd_live_comments(args):
+    post_id = args.post_id.removeprefix("t3_")
+    path = f"/comments/{post_id}"
+    soup, base_url = redlib_get(path)
+    comments, total = parse_redlib_comments(soup, args.limit)
+    if not comments:
+        print(f"No comments found for post {post_id} (live).")
+        return
+    print(f"---\n### Top {len(comments)} Comments (from {total} parsed, sorted by score) — live via Redlib\n")
+    for block in comments:
+        print(block)
+        print()
+
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Fetch Reddit content via Arctic Shift")
+    parser = argparse.ArgumentParser(description="Fetch Reddit content via Arctic Shift and Redlib")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_post = sub.add_parser("post", help="Fetch a post by ID")
@@ -600,9 +670,26 @@ def main():
     p_user.add_argument("--limit", type=int, default=DEFAULT_POST_LIMIT,
                         help=f"Number of each (default: {DEFAULT_POST_LIMIT})")
 
+    p_live_browse = sub.add_parser("live-browse", help="Browse real-time posts via Redlib")
+    p_live_browse.add_argument("subreddit")
+    p_live_browse.add_argument("--sort", choices=["hot", "new", "rising", "top"], default="hot",
+                               help="Sort order (default: hot)")
+
+    p_live_post = sub.add_parser("live-post", help="Fetch a post with real-time data via Redlib")
+    p_live_post.add_argument("post_id")
+    p_live_post.add_argument("--comments", type=int, metavar="N",
+                             help="Also fetch top N comments")
+
+    p_live_comments = sub.add_parser("live-comments", help="Fetch real-time comments via Redlib")
+    p_live_comments.add_argument("post_id")
+    p_live_comments.add_argument("--limit", type=int, default=DEFAULT_COMMENT_LIMIT,
+                                 help=f"Number of top comments (default: {DEFAULT_COMMENT_LIMIT})")
+
     args = parser.parse_args()
     {"post": cmd_post, "comments": cmd_comments, "browse": cmd_browse,
-     "search": cmd_search, "user": cmd_user}[args.cmd](args)
+     "search": cmd_search, "user": cmd_user,
+     "live-browse": cmd_live_browse, "live-post": cmd_live_post,
+     "live-comments": cmd_live_comments}[args.cmd](args)
 
 
 if __name__ == "__main__":
