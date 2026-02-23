@@ -175,6 +175,216 @@ def redlib_get(path):
     sys.exit(1)
 
 
+def parse_redlib_posts(soup):
+    """Parse post listing from Redlib HTML. Returns list of post dicts."""
+    posts_div = soup.select_one("div#posts")
+    if not posts_div:
+        return []
+
+    results = []
+    for el in posts_div.select("div.post"):
+        post = {}
+        post["id"] = el.get("id", "")
+
+        # Title
+        title_el = el.select_one("h2.post_title")
+        if title_el:
+            title_link = title_el.select_one("a[href]")
+            post["title"] = title_link.get_text(strip=True) if title_link else title_el.get_text(strip=True)
+            post["permalink"] = title_link["href"] if title_link else ""
+        else:
+            continue  # skip posts without titles
+
+        # Author
+        author_el = el.select_one("a.post_author")
+        post["author"] = author_el.get_text(strip=True).removeprefix("u/") if author_el else "[unknown]"
+
+        # Subreddit
+        sub_el = el.select_one("a.post_subreddit")
+        post["subreddit"] = sub_el.get_text(strip=True).removeprefix("r/") if sub_el else ""
+
+        # Score
+        score_el = el.select_one("div.post_score")
+        if score_el and score_el.get("title"):
+            try:
+                post["score"] = int(score_el["title"])
+            except ValueError:
+                post["score"] = 0
+        else:
+            post["score"] = 0
+
+        # Comment count
+        comments_el = el.select_one("a.post_comments")
+        if comments_el and comments_el.get("title"):
+            try:
+                post["num_comments"] = int(comments_el["title"].split()[0])
+            except (ValueError, IndexError):
+                post["num_comments"] = 0
+        else:
+            post["num_comments"] = 0
+
+        # Flair
+        flair_el = el.select_one("a.post_flair")
+        post["link_flair_text"] = flair_el.get_text(strip=True) if flair_el else ""
+
+        # Timestamp
+        time_el = el.select_one("span.created")
+        post["time_relative"] = time_el.get_text(strip=True) if time_el else ""
+        post["time_absolute"] = time_el.get("title", "") if time_el else ""
+
+        # NSFW / spoiler
+        post["over_18"] = bool(el.select_one("small.nsfw"))
+        post["spoiler"] = bool(el.select_one("small.spoiler"))
+        post["stickied"] = "stickied" in el.get("class", [])
+
+        # Body preview
+        body_el = el.select_one("div.post_body.post_preview")
+        post["body_preview"] = body_el.get_text(strip=True)[:300] if body_el else ""
+
+        results.append(post)
+
+    return results
+
+
+def parse_redlib_post_detail(soup):
+    """Parse a single post detail page. Returns post dict."""
+    el = soup.select_one("div.post.highlighted")
+    if not el:
+        el = soup.select_one("div.post")
+    if not el:
+        return None
+
+    post = {}
+    post["id"] = el.get("id", "")
+
+    # Title (h1 on detail page)
+    title_el = el.select_one("h1.post_title")
+    if title_el:
+        # Remove flair/nsfw/spoiler tags to get clean title
+        for tag in title_el.select("a.post_flair, small.nsfw, small.spoiler"):
+            tag.decompose()
+        post["title"] = title_el.get_text(strip=True)
+    else:
+        post["title"] = "[untitled]"
+
+    # Re-parse flair from a fresh copy if needed
+    flair_el = el.select_one("a.post_flair")
+    post["link_flair_text"] = flair_el.get_text(strip=True) if flair_el else ""
+
+    # Author, subreddit, score (same selectors as listing)
+    author_el = el.select_one("a.post_author")
+    post["author"] = author_el.get_text(strip=True).removeprefix("u/") if author_el else "[unknown]"
+
+    sub_el = el.select_one("a.post_subreddit")
+    post["subreddit"] = sub_el.get_text(strip=True).removeprefix("r/") if sub_el else ""
+
+    score_el = el.select_one("div.post_score")
+    if score_el and score_el.get("title"):
+        try:
+            post["score"] = int(score_el["title"])
+        except ValueError:
+            post["score"] = 0
+    else:
+        post["score"] = 0
+
+    # Comment count
+    count_el = soup.select_one("p#comment_count")
+    if count_el:
+        try:
+            post["num_comments"] = int(count_el.get_text(strip=True).split()[0])
+        except (ValueError, IndexError):
+            post["num_comments"] = 0
+    else:
+        post["num_comments"] = 0
+
+    # Timestamp
+    time_el = el.select_one("span.created")
+    post["time_relative"] = time_el.get_text(strip=True) if time_el else ""
+    post["time_absolute"] = time_el.get("title", "") if time_el else ""
+
+    # Flags
+    post["over_18"] = bool(el.select_one("small.nsfw"))
+    post["spoiler"] = bool(el.select_one("small.spoiler"))
+    post["locked"] = False  # Not reliably detectable from Redlib HTML
+
+    # Full body
+    body_el = el.select_one("div.post_body")
+    if body_el and "post_preview" not in body_el.get("class", []):
+        post["body"] = body_el.get_text(separator="\n", strip=True)
+    else:
+        post["body"] = ""
+
+    # Upvote ratio
+    ratio_el = el.select_one("div.post_footer p")
+    if ratio_el:
+        ratio_text = ratio_el.get_text(strip=True)
+        if "%" in ratio_text:
+            post["upvote_ratio"] = ratio_text.split("%")[0] + "%"
+
+    return post
+
+
+def parse_redlib_comments(soup, limit=DEFAULT_COMMENT_LIMIT):
+    """Parse comments from a Redlib post page. Returns list of formatted strings."""
+
+    def _parse_comment(el, depth=0):
+        """Recursively parse a comment and its replies."""
+        results = []
+
+        author_el = el.select_one(":scope > details.comment_right > summary.comment_data > a.comment_author")
+        if not author_el:
+            return results
+        author = author_el.get_text(strip=True)
+        is_op = "op" in author_el.get("class", [])
+
+        score_el = el.select_one(":scope > div.comment_left > p.comment_score")
+        score_raw = score_el.get("title", "0") if score_el else "0"
+        try:
+            score = int(score_raw)
+        except ValueError:
+            score = 0
+
+        body_el = el.select_one(":scope > details.comment_right > div.comment_body")
+        body = body_el.get_text(separator="\n", strip=True) if body_el else ""
+
+        if not body or body in ("[deleted]", "[removed]"):
+            return results
+
+        results.append({
+            "author": author,
+            "score": score,
+            "body": body,
+            "depth": depth,
+            "is_op": is_op,
+        })
+
+        # Parse replies
+        replies_el = el.select_one(":scope > details.comment_right > blockquote.replies")
+        if replies_el:
+            for child in replies_el.select(":scope > div.comment"):
+                results.extend(_parse_comment(child, depth + 1))
+
+        return results
+
+    all_comments = []
+    for thread in soup.select("div.thread > div.comment"):
+        all_comments.extend(_parse_comment(thread))
+
+    # Sort by score descending, take top N
+    all_comments.sort(key=lambda c: c["score"], reverse=True)
+    top = all_comments[:limit]
+
+    formatted = []
+    for c in top:
+        indent = "  " * c["depth"]
+        op_tag = " [OP]" if c["is_op"] else ""
+        header = f"{indent}**{c['author']}**{op_tag} (↑{c['score']})"
+        body_lines = "\n".join(f"{indent}{line}" for line in c["body"].splitlines())
+        formatted.append(f"{header}\n{body_lines}")
+
+    return formatted, len(all_comments)
+
+
 def fmt_post(p):
     lines = []
     flair  = f" | **Flair:** {p['link_flair_text']}" if p.get("link_flair_text") else ""
