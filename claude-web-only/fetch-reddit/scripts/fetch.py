@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 """
-Arctic Shift Reddit fetch script.
+Reddit content fetcher via Arctic Shift (archive) and Redlib (real-time).
 Returns clean markdown formatted for LLM ingestion.
 
-Usage:
+Archive commands (Arctic Shift):
   python fetch.py post POST_ID [--comments N]
-  python fetch.py browse SUBREDDIT [--limit N]
-  python fetch.py search SUBREDDIT "keywords" [--limit N]
+  python fetch.py browse SUBREDDIT [--flair F] [--after T] [--before T] [--nsfw] [--author U] [--limit N]
+  python fetch.py search SUBREDDIT "keywords" [--title-only] [--body-only] [--flair F] [--after T] [--before T] [--author U] [--limit N]
   python fetch.py comments POST_ID [--limit N]
-  python fetch.py user USERNAME [--limit N]
+  python fetch.py user USERNAME [--limit N] [--after T] [--before T]
+  python fetch.py subreddit-info SUBREDDIT
+  python fetch.py user-info USERNAME
+
+Live commands (Redlib):
+  python fetch.py live-browse SUBREDDIT [--sort hot|new|rising|top]
+  python fetch.py live-post POST_ID [--comments N]
+  python fetch.py live-comments POST_ID [--limit N]
 """
 
 import sys
