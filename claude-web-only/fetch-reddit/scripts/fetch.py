@@ -720,7 +720,10 @@ def cmd_live_browse(args):
     soup, base_url = redlib_get(path)
     posts = parse_redlib_posts(soup)
     if not posts:
-        print(f"No posts found in r/{args.subreddit} (live). Redlib HTML may have changed or the subreddit may not exist.")
+        page_title = soup.find("title")
+        title_text = page_title.get_text(strip=True) if page_title else "unknown"
+        print(f"No posts found in r/{args.subreddit} (live). Page title was: '{title_text}'. "
+              f"Try archive commands as a fallback.")
         return
     print(f"# r/{args.subreddit} — {len(posts)} {sort} posts (live via Redlib)\n")
     for p in posts:
@@ -775,7 +778,10 @@ def cmd_live_comments(args):
     soup, base_url = redlib_get(path)
     comments, total = parse_redlib_comments(soup, args.limit)
     if not comments:
-        print(f"No comments found for post {post_id} (live).")
+        page_title = soup.find("title")
+        title_text = page_title.get_text(strip=True) if page_title else "unknown"
+        print(f"No comments found for post {post_id} (live). Page title was: '{title_text}'. "
+              f"Try archive commands as a fallback.")
         return
     print(f"---\n### Top {len(comments)} Comments (from {total} parsed, sorted by score) — live via Redlib\n")
     for block in comments:
