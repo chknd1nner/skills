@@ -66,6 +66,22 @@ The script automatically fails over to the next instance. You'll only see an err
 - Cloudflare challenge — instance is behind additional protection
 - Timeout — instance is slow to respond
 
+### Redlib returns a page but posts are empty, or page title is an error message
+
+**Cause:** The Redlib instance loaded successfully (Anubis solved, cookie set) but Reddit's API rejected that instance's requests. Redlib serves its own error page as HTTP 200 — common titles: "Backend temporarily unavailable. Retrying..." or "Error: Failed to parse page JSON data".
+
+The script now detects these and skips to the next instance. If all instances show this error, Reddit is throttling all currently-known Redlib instance IPs.
+
+**Tell the user:**
+> "All Redlib instances are currently being blocked by Reddit's API. This happens periodically as Reddit tightens its crackdown on alternative frontends. Archive commands (`browse`, `search`, `post`, `comments`) still work via Arctic Shift for content older than ~36 hours."
+
+### Warning: Could not refresh Redlib instance list from GitHub
+
+**Cause:** The request to `raw.githubusercontent.com` timed out or failed. The script falls back to its bundled instance list automatically — live commands will still work if the bundled instances are up.
+
+**If you see this warning repeatedly:**
+> "The skill couldn't reach GitHub to refresh the Redlib instance list and is using a potentially stale fallback. Check that `raw.githubusercontent.com` is accessible under your domain allowlist settings."
+
 ## Free tier limitations
 
 Free tier users may only have access to "Package managers only" and cannot add external domains.
