@@ -633,6 +633,68 @@ def cmd_user(args):
             print(f"  Post: `{post_id}`")
             print()
 
+def cmd_subreddit_info(args):
+    data = get(f"{BASE}/api/subreddits/search", {
+        "subreddit": args.subreddit,
+        "limit": 1,
+    })
+    subs = data.get("data", [])
+    if not subs:
+        print(f"No subreddit found: r/{args.subreddit}")
+        return
+
+    s = subs[0]
+    nsfw = " 🔞 NSFW" if s.get("over18") else ""
+    print(f"# r/{s.get('display_name', args.subreddit)}{nsfw}\n")
+    print(f"**Subscribers:** {s.get('subscribers', 'N/A'):,}")
+    if s.get("active_user_count"):
+        print(f"**Active users:** {s['active_user_count']:,}")
+    if s.get("created_utc"):
+        print(f"**Created:** {fmt_date(s['created_utc'])}")
+
+    title = s.get("title", "")
+    if title:
+        print(f"**Title:** {title}")
+
+    desc = s.get("public_description", "")
+    if desc:
+        print(f"\n{desc.strip()}")
+
+    long_desc = s.get("description", "")
+    if long_desc and long_desc != desc:
+        print(f"\n---\n{long_desc.strip()[:1000]}")
+
+
+def cmd_user_info(args):
+    data = get(f"{BASE}/api/users/search", {
+        "author": args.username,
+        "limit": 1,
+    })
+    users = data.get("data", [])
+    if not users:
+        print(f"No user found: u/{args.username}")
+        return
+
+    u = users[0]
+    meta = u.get("_meta", {})
+
+    print(f"# u/{u.get('author', args.username)}\n")
+
+    if meta.get("total_karma"):
+        print(f"**Total karma:** {meta['total_karma']:,}")
+    if meta.get("post_karma") is not None:
+        print(f"**Post karma:** {meta['post_karma']:,} | **Comment karma:** {meta.get('comment_karma', 0):,}")
+    if meta.get("num_posts") is not None:
+        print(f"**Posts:** {meta['num_posts']:,} | **Comments:** {meta.get('num_comments', 0):,}")
+
+    if meta.get("earliest_post_at"):
+        print(f"**First post:** {fmt_date(meta['earliest_post_at'])}")
+    if meta.get("last_post_at"):
+        print(f"**Last post:** {fmt_date(meta['last_post_at'])}")
+    if meta.get("last_comment_at"):
+        print(f"**Last comment:** {fmt_date(meta['last_comment_at'])}")
+
+
 # ── Redlib (live) subcommands ─────────────────────────────────────────────────
 
 def cmd_live_browse(args):
@@ -763,11 +825,19 @@ def main():
     p_live_comments.add_argument("--limit", type=int, default=DEFAULT_COMMENT_LIMIT,
                                  help=f"Number of top comments (default: {DEFAULT_COMMENT_LIMIT})")
 
+    p_sub_info = sub.add_parser("subreddit-info", help="Get subreddit metadata")
+    p_sub_info.add_argument("subreddit")
+
+    p_user_info = sub.add_parser("user-info", help="Get user profile stats")
+    p_user_info.add_argument("username")
+
     args = parser.parse_args()
     {"post": cmd_post, "comments": cmd_comments, "browse": cmd_browse,
      "search": cmd_search, "user": cmd_user,
      "live-browse": cmd_live_browse, "live-post": cmd_live_post,
-     "live-comments": cmd_live_comments}[args.cmd](args)
+     "live-comments": cmd_live_comments,
+     "subreddit-info": cmd_subreddit_info, "user-info": cmd_user_info,
+     }[args.cmd](args)
 
 
 if __name__ == "__main__":
