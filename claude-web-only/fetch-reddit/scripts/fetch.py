@@ -196,7 +196,7 @@ def parse_redlib_posts(soup):
         # Title
         title_el = el.select_one("h2.post_title")
         if title_el:
-            title_link = title_el.select_one("a[href]")
+            title_link = title_el.select_one("a:not(.post_flair)[href]")
             post["title"] = title_link.get_text(strip=True) if title_link else title_el.get_text(strip=True)
             post["permalink"] = title_link["href"] if title_link else ""
         else:
