@@ -90,4 +90,4 @@ python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-comments 1r7vovv --l
 - **No filters:** Redlib doesn't support flair, time range, or author filtering. Use archive `browse` for filtered listings.
 - **No pagination:** Returns whatever Redlib's page shows (typically 25 posts).
 - **HTML parsing:** If Redlib changes their HTML structure, parsers may break. The script will report "HTML may have changed" — fall back to archive commands.
-- **Instance failover:** The script tries multiple Redlib instances in order. If all fail, it reports which instances were tried and why each failed.
+- **Instance failover:** At the start of each chat, the first `live-*` command fetches the current instance list from the official Redlib registry (`github.com/redlib-org/redlib-instances`). The script then tries instances in order until one returns valid content. If all fail — typically because Reddit is blocking that instance's API calls — it reports each failure reason explicitly. Fall back to archive commands in that case.
