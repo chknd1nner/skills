@@ -48,3 +48,4 @@ venv.bak/
 .env
 .env.local
 readwren-profiles/
+.worktrees/
