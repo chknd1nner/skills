@@ -14,12 +14,14 @@ Usage:
 import sys
 import json
 import argparse
+import hashlib
+import re as _re
+import subprocess
 from datetime import datetime, timezone
 
 try:
     from curl_cffi import requests
 except ImportError:
-    import subprocess
     result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "curl_cffi", "--break-system-packages", "-q"],
         capture_output=True, text=True
@@ -36,6 +38,24 @@ except ImportError:
         )
         sys.exit(1)
     from curl_cffi import requests
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "beautifulsoup4", "--break-system-packages", "-q"],
+        capture_output=True, text=True
+    )
+    from bs4 import BeautifulSoup
+
+try:
+    import requests as std_requests
+except ImportError:
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "requests", "--break-system-packages", "-q"],
+        capture_output=True, text=True
+    )
+    import requests as std_requests
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -56,6 +76,16 @@ COMMENT_FETCH_SIZE = 100    # fetch this many from API before trimming
 DEFAULT_COMMENT_LIMIT = 20  # return this many to LLM unless --limit passed
 DEFAULT_POST_LIMIT = 25
 
+REDLIB_INSTANCES = [
+    "https://redlib.tiekoetter.com",
+    "https://safereddit.com",
+    "https://redlib.zaggy.nl",
+    "https://red.artemislena.eu",
+    "https://l.opnxng.com",
+]
+
+REDLIB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get(url, params=None):
@@ -70,6 +100,79 @@ def get(url, params=None):
 
 def fmt_date(ts):
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def solve_anubis(session, url):
+    """Fetch a URL through Anubis PoW protection. Returns the response."""
+    from urllib.parse import urlparse
+
+    r = session.get(url, timeout=15, verify=False)
+
+    # Check for Anubis challenge
+    m = _re.search(r'id="anubis_challenge"[^>]*>(.*?)</script>', r.text, _re.DOTALL)
+    if not m:
+        return r  # No challenge — already authed or no Anubis
+
+    # Parse challenge
+    chal = json.loads(m.group(1))
+    random_data = chal['challenge']['randomData']
+    difficulty = chal['rules']['difficulty']
+    zero_bytes = difficulty // 2
+    check_nibble = difficulty % 2 != 0
+
+    # Solve PoW
+    nonce = 0
+    while True:
+        h = hashlib.sha256(f"{random_data}{nonce}".encode()).digest()
+        ok = all(h[i] == 0 for i in range(zero_bytes))
+        if ok and check_nibble and (h[zero_bytes] >> 4) != 0:
+            ok = False
+        if ok:
+            break
+        nonce += 1
+
+    # Submit solution
+    parsed = urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    session.get(
+        f"{base}/.within.website/x/cmd/anubis/api/pass-challenge",
+        params={
+            'id': chal['challenge']['id'],
+            'response': h.hex(),
+            'nonce': str(nonce),
+            'redir': parsed.path or '/',
+            'elapsedTime': '100',
+        },
+        allow_redirects=True, timeout=15, verify=False
+    )
+
+    # Re-fetch with auth cookie
+    return session.get(url, timeout=15, verify=False)
+
+
+def redlib_get(path):
+    """Try Redlib instances in order. Returns (BeautifulSoup, base_url) or exits on failure."""
+    import warnings
+    warnings.filterwarnings("ignore", message="Unverified HTTPS request")
+
+    session = std_requests.Session()
+    session.headers['User-Agent'] = REDLIB_UA
+
+    errors = []
+    for base in REDLIB_INSTANCES:
+        url = f"{base}{path}"
+        try:
+            r = solve_anubis(session, url)
+            if r.status_code == 200 and "anubis" not in r.text.lower()[:500]:
+                return BeautifulSoup(r.text, "html.parser"), base
+            errors.append(f"{base}: got Anubis page despite solving")
+        except Exception as e:
+            errors.append(f"{base}: {e}")
+
+    print("ERROR: All Redlib instances failed:", file=sys.stderr)
+    for err in errors:
+        print(f"  {err}", file=sys.stderr)
+    sys.exit(1)
 
 
 def fmt_post(p):
