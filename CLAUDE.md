@@ -2,7 +2,7 @@
 
 ## Rules
 
-- When creating or modifying skills, consult `/.claude/skills/skill-creator/SKILL.md` first.
+- When creating or modifying skills, consult the 'skill-creator' skill first.
 - Place skills in the correct directory by platform compatibility:
   - `claude-code-only/` — requires CLI tools, bash, non-conforming YAML, or network access
   - `claude-web-only/` — designed for Claude.ai only
