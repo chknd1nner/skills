@@ -1,7 +1,7 @@
 # Deep Research Skill — Design
 
 **Date:** 2026-03-07
-**Status:** Revised — v2 architecture (CLI subprocess orchestration)
+**Status:** Revised — v2 corrected architecture (lead agent as subagent, research via CLI subprocesses)
 
 ---
 
@@ -13,29 +13,28 @@ A Claude Code skill that replicates Claude.ai's Deep Research feature: a multi-a
 
 ## Architecture
 
-**Approach: CLI subprocess orchestration**
+**Approach: Lead agent as subagent + CLI subprocesses for research/citations**
 
-Claude (the main session) acts as the lead researcher directly, following the research process in `references/lead-agent.md`. Research subagents and the citations agent are launched as independent `claude -p` CLI subprocesses via the `Bash` tool, running in parallel where needed.
+The main session delegates all research work to a lead agent subagent (via the `Agent` tool), keeping the main context clean. The lead agent — which cannot itself use the `Agent` tool to spawn further subagents — launches research subagents and the citations agent as independent `claude -p` CLI subprocesses via `Bash`.
 
 ```
 User invokes skill
-  └─ Claude (main session, following lead-agent.md)
-        ├─ Plans research (query type: depth-first / breadth-first / straightforward)
-        ├─ Bash: launches N parallel `claude -p` subprocesses (research subagents)
-        │     └─ Each subprocess: WebSearch + WebFetch → writes findings to tmp file → exits
-        ├─ Reads all tmp files → synthesises → writes draft report (with [^?] markers)
-        └─ Bash: launches `claude -p` subprocess (citations agent)
-              └─ Reads draft + tmp files → surgical Edit calls → appends References → exits
-                    └─ Cleanup tmp directory
+  └─ Claude (main session)
+        └─ Agent tool → Lead agent subagent (following lead-agent.md)
+                ├─ Plans research (query type: depth-first / breadth-first / straightforward)
+                ├─ Bash: launches N parallel `claude -p` subprocesses (research subagents)
+                │     └─ Each subprocess: WebSearch + WebFetch → writes findings to tmp file → exits
+                ├─ Reads all tmp files → synthesises → writes draft report (with [^?] markers)
+                └─ Bash: launches `claude -p` subprocess (citations agent)
+                      └─ Reads draft + tmp files → surgical Edit calls → appends References → exits
+                            └─ Cleanup tmp directory
 ```
 
-**Why CLI subprocesses instead of the `Agent` tool:**
+**Why this architecture:**
 
-Claude Code subagents (spawned via the `Agent` tool) cannot themselves spawn further subagents. This is an explicit platform constraint documented at [code.claude.com/docs/en/sub-agents](https://code.claude.com/docs/en/sub-agents):
+- **Lead agent as `Agent` subagent:** The main session context is kept clean — no research tool calls, web fetches, or draft content polluting the conversation. The main session simply invokes the Agent tool and gets back a completion when the report is written.
 
-> *"Subagents cannot spawn other subagents. If your workflow requires nested delegation, use Skills or chain subagents from the main conversation."*
-
-The original design (v1) delegated to a lead agent subagent expecting it to then spawn research subagents — this fails silently, causing the lead agent to do all research itself in a single context. The CLI subprocess approach bypasses this limitation entirely: each `claude -p` process is an independent Claude Code session with full tool access, not a constrained subagent.
+- **Research/citations via `claude -p`:** Claude Code subagents (spawned via the `Agent` tool) cannot themselves spawn further subagents. This is the v1 failure mode — the lead agent subagent silently fell back to doing all research in a single context. The `claude -p` workaround is targeted specifically at this constraint: each CLI subprocess is an independent Claude Code session with full tool access, not a constrained subagent. Only the lead agent needs this workaround; the main session does not.
 
 **The filesystem is still the coordination layer** — consistent with orchestration harnesses like RALPH loops.
 
@@ -77,13 +76,27 @@ claude-code-only/deep-research/
     citations-agent.md
 ```
 
-Lives in `claude-code-only/` — requires Bash (to launch CLI subprocesses), `WebSearch`, `WebFetch`, and filesystem tools unavailable in Claude.ai.
+Lives in `claude-code-only/` — requires `Agent`, `Bash` (to launch CLI subprocesses from within the lead agent), `WebSearch`, `WebFetch`, and filesystem tools unavailable in Claude.ai.
+
+---
+
+## Lead Agent Invocation
+
+The main session (following SKILL.md) reads `lead-agent.md` and passes its content as the task prompt to the `Agent` tool, along with the research query and current date:
+
+```
+Agent tool call:
+  prompt: "[full content of lead-agent.md]\n\nQuery: {user_query}\nDate: {current_date}\nOutput: {output_path}"
+  model: claude-sonnet-4-6 (default) or claude-opus-4-6 (--model opus override)
+```
+
+The lead agent runs entirely in its own context. When it completes, the final report is written to disk and the main session reports success.
 
 ---
 
 ## Subprocess Invocation Pattern
 
-Research subagents are launched via Bash using `claude -p`:
+The lead agent launches research subagents via Bash using `claude -p`:
 
 ```bash
 claude -p "DETAILED_TASK_DESCRIPTION. Write your findings to: /path/to/subagent-N.md" \
@@ -127,9 +140,8 @@ The reference prompts are adapted from Anthropic's Claude.ai production prompts.
 
 | Change | Detail |
 |---|---|
-| `run_blocking_subagent` → `Bash` | Launch `claude -p` subprocess instead of Agent tool call |
-| Remove `{TASK_CONTEXT}` / `{QUERY}` block | Claude already has full context from SKILL.md — no injection needed |
-| Remove `{CURRENT_DATE}` line | Claude knows the date from SKILL.md context |
+| `run_blocking_subagent` → `Bash` | Lead agent launches `claude -p` subprocesses — it cannot use the Agent tool from within a subagent |
+| `{TASK_CONTEXT}` / `{QUERY}` / `{CURRENT_DATE}` | Injected by main session into the Agent tool prompt at invocation time |
 | `complete_task` → `Write` | Write draft to draft output path |
 | `web_search` → `WebSearch`, `web_fetch` → `WebFetch` | Tool name substitution |
 | `repl` tool | Removed |
@@ -204,7 +216,7 @@ The citations agent does NOT rewrite the document. Instead:
 
 | Role | Model | How set |
 |---|---|---|
-| Lead (Claude main session) | `claude-sonnet-4-6` default, `claude-opus-4-6` with `--model opus` | SKILL.md parses `--model` flag; session model inherited |
+| Lead agent (Agent subagent) | `claude-sonnet-4-6` default, `claude-opus-4-6` with `--model opus` | `model` parameter on Agent tool call; SKILL.md parses `--model` flag |
 | Research subprocesses | `claude-haiku-4-5-20251001` (hardcoded) | `--model` flag in `claude -p` invocation |
 | Citations subprocess | `claude-haiku-4-5-20251001` (hardcoded) | `--model` flag in `claude -p` invocation |
 
@@ -217,5 +229,5 @@ The citations agent does NOT rewrite the document. Instead:
 ## Prompt Engineering Notes
 
 - **`evaluate_source_quality` fake tool:** Keep verbatim in both lead and subagent prompts. This is deliberate prompt engineering — the DO NOT USE instruction suppresses token-expensive source verification loops by precisely targeting that behavioral cluster.
-- **Parallel subprocess launches:** Lead uses Bash background processes (`&`) + `wait` for true parallelism. This replaces the original parallel `Agent` tool calls.
+- **Parallel subprocess launches:** The lead agent uses Bash background processes (`&`) + `wait` for true parallelism. This replaces the original parallel `Agent` tool calls, which the lead agent cannot make from within a subagent context.
 - **Subagent count guidelines:** Preserved from original (1 for straightforward, 2–3 standard, 3–5 medium, 5–20 high complexity, never exceed 20).
