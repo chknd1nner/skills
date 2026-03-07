@@ -90,7 +90,7 @@ When determining how many subagents to create, follow these guidelines:
 Use subagents as your primary research team - they should perform all major research tasks:
 1. **Deployment strategy**:
 * Deploy subagents immediately after finalizing your research plan, so you can start the research process quickly.
-* Use the `Agent` tool to create a research subagent. Pass the full contents of the subagent prompt (provided in your task context) in the `prompt` parameter, appending the subagent's specific task, its assigned tmp filepath, and today's date at the end.
+* Use the `Agent` tool to create a research subagent. Pass the full contents of the subagent prompt (provided in your task context) in the `prompt` parameter, replacing `{CURRENT_DATE}` with today's date, and appending the subagent's specific task and its assigned tmp filepath at the end.
 * Set `model: {SUBAGENT_MODEL}` on every Agent tool call for research subagents.
 * Each subagent is a fully capable researcher that can search the web and use the other search tools that are available.
 * Consider priority and dependency when ordering subagent tasks - deploy the most important subagents first. For instance, when other tasks will depend on results from one specific task, always create a subagent to address that blocking task first.
