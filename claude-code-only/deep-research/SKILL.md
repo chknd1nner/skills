@@ -53,7 +53,7 @@ mkdir -p {OUTPUT_DIR}/.tmp/{DATE}-{SLUG}
 
 Tell the user:
 > Starting deep research on: "{QUERY}"
-> Lead model: {LEAD_MODEL} | Subagents: claude-haiku-4-5-20251001
+> Lead model: {LEAD_MODEL} | Subagents: {SUBAGENT_MODEL}
 > Report will be saved to: {OUTPUT_PATH}
 
 **5. Spawn lead agent**
@@ -71,8 +71,10 @@ The task context block to append:
 Current date: {DATE}
 Research query: {QUERY}
 Draft output path: {DRAFT_PATH}
+Final output path: {OUTPUT_PATH}
 Tmp directory: {TMP_DIR}
-Subagent model: claude-haiku-4-5-20251001
+Subagent model: {SUBAGENT_MODEL}
+Citations model: {CITATIONS_MODEL}
 
 Subagent prompt — pass this verbatim to each Agent tool call for research subagents, appending the specific task description and assigned tmp filepath at the end:
 ---
@@ -92,9 +94,7 @@ Read `references/citations-agent.md`. Invoke the Agent tool with:
 - `prompt`: the full contents of `references/citations-agent.md`, with `{TASK_CONTEXT}` replaced by:
 
 ```
-Draft report path: {DRAFT_PATH}
-Tmp directory: {TMP_DIR}
-Final output path: {OUTPUT_PATH}
+Resolve all [^?] markers in the draft report and add citations. Draft report path: {DRAFT_PATH}. Subagent source files are in: {TMP_DIR}. Write the final cited report to: {OUTPUT_PATH}.
 ```
 
 Wait for the citations agent to complete.
