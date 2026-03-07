@@ -13,66 +13,54 @@ description: |
 
   Why web_fetch fails: Blocked by Reddit's bot protection. Returns 403.
 
-  This skill fetches full post text and top comments via Arctic Shift (archive) and
-  Redlib (real-time). Use live-* commands for current/trending content; archive
-  commands for search, filters, and historical data.
+  This skill fetches full post text and top comments via Redlib, a privacy-respecting
+  Reddit frontend. Use it whenever the user shares a Reddit link, asks what's happening
+  in a subreddit, or wants to read comments on a post.
 ---
 
 # Prerequisites
 
-This skill requires outbound network access to PyPI (to install dependencies on first run), the Arctic Shift API, and Redlib instances.
+This skill requires outbound network access to PyPI (to install dependencies on first run) and Redlib instances.
 
 | Requirement | Setting |
 |---|---|
 | **Code execution** | Settings → Capabilities → Code execution and file creation: **On** |
 | **Network egress** | Settings → Capabilities → Allow network egress: **On** |
-| **Domain access** | Domain allowlist: **"All domains"** OR **"Package managers + specific domains"** with `arctic-shift.photon-reddit.com` and `raw.githubusercontent.com` added |
+| **Domain access** | Domain allowlist: **"All domains"** OR **"Package managers + specific domains"** with `raw.githubusercontent.com` added |
 
-**Which domain option to use:**
-- "All domains" — simplest, works immediately
-- "Package managers + specific domains" — more restrictive; add domains listed above manually
-- On the **first `live-*` command** each chat session, the script fetches the current Redlib instance list from `raw.githubusercontent.com` (~1s, one-time). If unreachable, it falls back to a bundled list automatically.
+On the **first command** each chat session, the script fetches the current Redlib instance list from `raw.githubusercontent.com` (~1s, one-time). If unreachable, it falls back to a bundled list automatically.
 
-**Free tier note:** Free tier users may not have access to domain allowlist configuration beyond "Package managers only", which blocks both Arctic Shift and Redlib. Check the [official network egress documentation](https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude) for current plan-level restrictions.
+**Free tier note:** Free tier users may not have access to domain allowlist configuration beyond "Package managers only". Check the [official network egress documentation](https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude) for current plan-level restrictions.
 
 > **Verify prerequisites before running any commands if the user reports errors.**
 
 # Purpose
 
-You cannot access reddit.com directly with `web_fetch`. This skill provides two data sources:
+You cannot access reddit.com directly with `web_fetch`. This skill uses **Redlib** — a privacy-respecting Reddit frontend — to fetch live post content and browse subreddits in real time.
 
-- **Arctic Shift** (`arctic-shift.photon-reddit.com`) — Community archive with search, filters, and historical data. Free REST API, no auth required. Data freshness: ~36 hours behind real-time. Dependencies: `curl_cffi`.
-- **Redlib** — Privacy-respecting Reddit frontend with real-time data. Accessed via instance failover with Anubis PoW solving. Dependencies: `requests`, `beautifulsoup4`.
-
-The `/mnt/skills/user/fetch-reddit/scripts/fetch.py` script handles all API calls, Anubis PoW solving, HTML parsing, field filtering, comment trimming, and formatting — returning clean markdown.
+The `/mnt/skills/user/fetch-reddit/scripts/fetch.py` script handles Anubis PoW solving, instance failover, HTML parsing, comment trimming, and formatting — returning clean markdown.
 
 ## Variables
 
 ```
-COMMENT_FETCH_SIZE: 100     (max comments fetched from API before trimming; API hard limit)
 DEFAULT_COMMENT_LIMIT: 20   (top N comments returned to LLM context after score-sort)
-DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
 ```
 
-`DEFAULT_COMMENT_LIMIT` is the primary tuning knob. Increase it for large controversial threads where breadth matters; decrease it for simple posts where you just want the gist.
+Increase for large controversial threads where breadth matters; decrease for simple posts where you just want the gist.
 
 ## Instructions
 
-1. All Reddit fetching goes through `fetch.py`. Never construct raw curl calls — the script handles API quirks, Anubis PoW, HTML parsing, and output formatting.
+1. All Reddit fetching goes through `fetch.py`. Never construct raw curl calls.
 
-2. `fetch.py` auto-installs `curl_cffi`, `beautifulsoup4`, and `requests` on first run. If installs fail, see `references/troubleshooting.md`.
+2. `fetch.py` auto-installs `beautifulsoup4` and `requests` on first run. If installs fail, see `references/troubleshooting.md`.
 
-3. **Share links** (`reddit.com/r/sub/s/XXXXXXX`) cannot be resolved — they redirect through reddit.com which is blocked. See Scenario 6.
+3. **Share links** (`reddit.com/r/sub/s/XXXXXXX`) cannot be resolved — they redirect through reddit.com which is blocked. See Scenario 4.
 
-4. **Data freshness**: Arctic Shift ingests posts within ~36 hours. For content newer than that, use `live-*` commands. Score and comment counts may read as 1/0 on fresh archive content — this is normal.
-
-5. **Deleted content**: Some posts and comments will show `[deleted]`/`[removed]`. The script filters these from comment output automatically.
-
-6. When in doubt about which command to use, consult the Source Routing table in Scenario 1. For detailed usage of any command, consult the appropriate file in `references/`.
+4. When in doubt about which command to use, the choice is simple: use `live-post` for a specific post, `live-browse` to see what's happening in a subreddit, `live-comments` for a comment thread.
 
 ## Workflow
 
-1. Identify what the user wants: a specific post, subreddit browse, keyword search, comment thread, user history, metadata, or real-time content.
+1. Identify what the user wants: a specific post, subreddit browse, or comment thread.
 2. Extract the post ID or subreddit name from any URL they provide. Post IDs are the alphanumeric segment after `/comments/` in a Reddit URL.
 3. Select the matching Cookbook scenario.
 4. Run the script via `bash_tool`.
@@ -81,36 +69,14 @@ DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
 
 ## Cookbook
 
-### Scenario 1: Source routing — live vs. archive
-
-- **IF**: You need to decide between a `live-*` command and an archive command
-- **THEN**: Use this routing table:
-
-| User wants... | Command | Why |
-|---|---|---|
-| What's trending now | `live-browse` | Real-time scores, hot/rising sort |
-| Fresh posts (<36h old) | `live-browse` | Not yet in Arctic Shift index |
-| Read a specific post right now | `live-post` | Current score, live content |
-| Read comments with real-time votes | `live-comments` | Current scores, nested threads |
-| Search posts by keyword | `search` | Redlib has no search capability |
-| Browse with flair/time filters | `browse` | Arctic Shift supports filters, Redlib doesn't |
-| Historical posts | `browse` with `--after`/`--before` | Archive data |
-| Subreddit metadata | `subreddit-info` | Arctic Shift endpoint |
-| User profile stats | `user-info` | Arctic Shift endpoint |
-
-- **EXAMPLES**:
-  - "What's hot in r/ClaudeAI?" → `live-browse`
-  - "Find posts about prompt caching in r/ClaudeAI" → `search`
-  - "Show me r/LocalLLaMA posts from last month with Bug flair" → `browse --flair Bug --after 30d`
-
-### Scenario 2: Fetch a specific post (with optional comments)
+### Scenario 1: Fetch a specific post (with optional comments)
 
 - **IF**: The user shares a Reddit URL containing `/comments/POST_ID/` or gives a bare post ID
-- **THEN**: Extract the post ID. Use `post` for archive data or `live-post` for real-time scores. Optionally add `--comments N` for discussion.
+- **THEN**: Extract the post ID and use `live-post`. Add `--comments N` to include discussion.
 - **DETAILS**: Consult `references/posts-and-comments.md`
 - **COMMANDS**:
   ```bash
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py post POST_ID --comments 20
+  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-post POST_ID
   python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-post POST_ID --comments 20
   ```
 - **EXAMPLES**:
@@ -118,79 +84,45 @@ DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
   - "What does post 1r7vovv say?"
   - "Summarise this thread including the top comments"
 
-### Scenario 3: Browse posts in a subreddit
+### Scenario 2: Browse posts in a subreddit
 
 - **IF**: The user wants to see what's happening in a subreddit without a specific post in mind
-- **THEN**: Use `live-browse` for current/trending content, or `browse` for filtered/historical content.
-- **DETAILS**: Consult `references/browsing-live.md` or `references/browsing-archive.md`
+- **THEN**: Use `live-browse` for current/trending content.
+- **DETAILS**: Consult `references/browsing-live.md`
 - **COMMANDS**:
   ```bash
-  # Real-time trending
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-browse SUBREDDIT --sort hot
-
-  # Archive with filters
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py browse SUBREDDIT --flair "Discussion" --after 7d
+  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-browse SUBREDDIT
+  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-browse SUBREDDIT --sort new
   ```
 - **EXAMPLES**:
-  - "What's going on in r/LocalLLaMA today?" → `live-browse`
-  - "Show me Bug-flaired posts in r/ClaudeAI from last week" → `browse --flair Bug --after 7d`
+  - "What's going on in r/LocalLLaMA today?"
+  - "Show me the hot posts in r/ClaudeAI"
+  - "What's new in r/programming?"
 
-### Scenario 4: Search for posts by keyword
-
-- **IF**: The user wants to find posts about a specific topic within a subreddit
-- **THEN**: Use `search`. Note: Arctic Shift requires a subreddit — Reddit-wide search is not supported. Redlib has no search.
-- **DETAILS**: Consult `references/searching.md`
-- **COMMANDS**:
-  ```bash
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py search SUBREDDIT "keywords" --limit 25
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py search SUBREDDIT "keywords" --title-only --after 30d
-  ```
-- **EXAMPLES**:
-  - "Find posts about the car wash problem in r/ClaudeAI"
-  - "Has anyone in r/LocalLLaMA discussed Arctic Shift?"
-  - "Search r/ClaudeAI for posts with 'prompt caching' in the title"
-
-### Scenario 5: Look up user activity or metadata
-
-- **IF**: The user wants to find posts/comments by a username, or get profile stats
-- **THEN**: Use `user` for activity history, `user-info` for profile stats (karma, counts, dates).
-- **DETAILS**: Consult `references/user-and-subreddit-info.md`
-- **COMMANDS**:
-  ```bash
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py user USERNAME --limit 25
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py user-info USERNAME
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py subreddit-info SUBREDDIT
-  ```
-- **EXAMPLES**:
-  - "What has u/spez been posting lately?" → `user`
-  - "What's u/spez's karma?" → `user-info`
-  - "Tell me about r/ClaudeAI" → `subreddit-info`
-
-### Scenario 6: User provides a mobile share link (/s/ URL)
-
-- **IF**: The URL contains `/r/sub/s/XXXXXXX` (Reddit mobile share format)
-- **THEN**:
-  1. Explain that share links redirect through reddit.com which is blocked
-  2. Ask for the post title or a keyword to search for it, or ask them to open on desktop and share the full URL
-  3. Offer to search the subreddit by title keywords as a fallback
-- **EXAMPLE RESPONSE**:
-  > "That's a mobile share link — I can't resolve it since it routes through reddit.com which is blocked. Do you know the post title or a keyword from it? I can search the subreddit and find it that way."
-
-### Scenario 7: Fetch comments standalone
+### Scenario 3: Fetch comments standalone
 
 - **IF**: The user already has a post and just wants to explore the comments, or wants more than the default
-- **THEN**: Use `comments` for archive or `live-comments` for real-time. The script fetches up to 100 comments, sorts by score, and returns the top N.
+- **THEN**: Use `live-comments`. The script fetches all visible comments, sorts by score, and returns the top N.
 - **DETAILS**: Consult `references/posts-and-comments.md`
 - **COMMANDS**:
   ```bash
-  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py comments POST_ID --limit 30
+  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-comments POST_ID
   python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-comments POST_ID --limit 30
   ```
 - **EXAMPLES**:
   - "What are people saying in the comments?"
   - "Show me the top 30 comments on that post"
 
-### Scenario 8: Troubleshooting
+### Scenario 4: User provides a mobile share link (/s/ URL)
+
+- **IF**: The URL contains `/r/sub/s/XXXXXXX` (Reddit mobile share format)
+- **THEN**:
+  1. Explain that share links redirect through reddit.com which is blocked, and Redlib cannot resolve them
+  2. Ask for the post title or a keyword, or ask them to open on desktop and share the full URL
+- **EXAMPLE RESPONSE**:
+  > "That's a mobile share link — I can't resolve it since it routes through reddit.com which is blocked. Do you know the post title or the subreddit it's from? If you can share the full desktop URL (it'll have `/comments/` in it), I can read it directly."
+
+### Scenario 5: Troubleshooting
 
 - **IF**: The user asks for help troubleshooting this skill or you notice errors during execution
 - **THEN**: Consult `references/troubleshooting.md` and follow the instructions there

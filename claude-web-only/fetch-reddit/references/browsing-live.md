@@ -1,8 +1,8 @@
 # Browsing Live (Redlib)
 
-Real-time Reddit content via Redlib instances with Anubis PoW solving. Use these commands when the user wants current/trending content or posts newer than ~36 hours (not yet indexed by Arctic Shift).
+Real-time Reddit content via Redlib instances with Anubis PoW solving.
 
-## Commands
+## Command
 
 ### live-browse
 
@@ -35,59 +35,10 @@ python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-browse programming -
 - "What's new in r/X today?"
 - Any request for current/fresh content
 
-### live-post
-
-Fetch a single post with real-time score and content.
-
-```bash
-python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-post POST_ID [--comments N]
-```
-
-**Flags:**
-- `--comments N` — Also fetch top N comments (sorted by score)
-
-**Output:** Full post detail with title, author, score, comment count, upvote ratio, body text, and optionally top comments.
-
-**Examples:**
-```bash
-# Post only
-python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-post 1r7vovv
-
-# Post with top 20 comments
-python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-post 1r7vovv --comments 20
-```
-
-**When to use:**
-- User wants current score/vote counts
-- Post is very recent (< 36 hours)
-- User explicitly asks for "live" or "current" data
-
-### live-comments
-
-Fetch comments for a post with real-time scores and nested threading.
-
-```bash
-python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-comments POST_ID [--limit N]
-```
-
-**Flags:**
-- `--limit N` — Number of top comments to return (default: 20)
-
-**Output:** Comments sorted by score descending, with author, score, OP indicator, and indentation for reply depth.
-
-**Examples:**
-```bash
-# Default top 20
-python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-comments 1r7vovv
-
-# More comments for a busy thread
-python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-comments 1r7vovv --limit 40
-```
-
 ## Limitations
 
-- **No search:** Redlib does not support keyword search. Use the archive `search` command instead.
-- **No filters:** Redlib doesn't support flair, time range, or author filtering. Use archive `browse` for filtered listings.
+- **No search:** Redlib does not support keyword search.
+- **No filters:** Redlib doesn't support flair, time range, or author filtering.
 - **No pagination:** Returns whatever Redlib's page shows (typically 25 posts).
-- **HTML parsing:** If Redlib changes their HTML structure, parsers may break. The script will report "HTML may have changed" — fall back to archive commands.
-- **Instance failover:** At the start of each chat, the first `live-*` command fetches the current instance list from the official Redlib registry (`github.com/redlib-org/redlib-instances`). The script then tries instances in order until one returns valid content. If all fail — typically because Reddit is blocking that instance's API calls — it reports each failure reason explicitly. Fall back to archive commands in that case.
+- **HTML parsing:** If Redlib changes their HTML structure, parsers may break. The script will report "HTML may have changed".
+- **Instance failover:** At the start of each chat, the first command fetches the current instance list from the official Redlib registry (`github.com/redlib-org/redlib-instances`). The script then tries instances in order until one returns valid content. If all fail — typically because Reddit is blocking that instance's API calls — it reports each failure reason explicitly.
