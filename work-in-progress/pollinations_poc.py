@@ -8,7 +8,8 @@ import requests
 import time
 from pathlib import Path
 
-ENDPOINT = "https://text.pollinations.ai/openai"
+ENDPOINT = "https://gen.pollinations.ai/v1/chat/completions"
+API_KEY = "sk_pT4jppAWsj2G8fVDGdm1gs2WDyni0Adw"
 CHAT_FILE = Path(__file__).parent / "chats" / "Pollinations.ais free image generation business model.md"
 
 SYSTEM_PROMPT = """You are a concise summariser. Given a chat transcript, produce a structured summary with:
@@ -35,10 +36,10 @@ def run():
     est_tokens = char_count // 4
 
     print(f"Transcript loaded: {char_count:,} chars (~{est_tokens:,} tokens estimated)")
-    print(f"Sending to Pollinations (model: openai / gpt-oss-20b)...\n")
+    print(f"Sending to Pollinations (model: claude-fast / Haiku 4.5)...\n")
 
     payload = {
-        "model": "openai",  # only model on anonymous tier; aliases: openai-fast, gpt-oss
+        "model": "claude-fast",  # Haiku 4.5 - free with auth key
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Here is the chat transcript to summarise:\n\n{transcript}"}
@@ -47,8 +48,12 @@ def run():
         "max_tokens": 1000
     }
 
+    headers = {
+        "Authorization": f"Bearer {API_KEY}"
+    }
+
     t_start = time.perf_counter()
-    response = requests.post(ENDPOINT, json=payload, timeout=120)
+    response = requests.post(ENDPOINT, json=payload, headers=headers, timeout=120)
     t_end = time.perf_counter()
 
     duration = t_end - t_start
