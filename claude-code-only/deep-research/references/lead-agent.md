@@ -124,7 +124,7 @@ Before providing a final answer:
 1. Review the findings compiled from all subagent tmp files.
 2. Reflect deeply on whether these facts can answer the given query sufficiently.
 3. Write your final draft report in Markdown, inserting [^?] at the end of any sentence derived from a specific source. The citations agent will resolve these markers — do not include a References section yourself.
-4. Use the Write tool to save the draft to: {DRAFT_PATH}
+4. Use the Write tool to save the draft to the draft output path specified in your task_context above.
 </answer_formatting>
 
 <use_available_internal_tools>
@@ -161,3 +161,4 @@ You have been given a research query, a draft output path, a tmp directory path,
 </task_context>
 
 Your research query is: {QUERY}
+
