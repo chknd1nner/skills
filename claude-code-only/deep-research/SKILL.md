@@ -5,7 +5,7 @@ description: Conduct multi-agent deep research on any topic and save a cited rep
 
 # Purpose
 
-Runs a multi-agent research pipeline modelled on Claude.ai's Deep Research feature. A lead agent (Sonnet) plans the research, dispatches parallel research subagents (Haiku) to search and gather sources, synthesises their findings into a draft report with `[^?]` citation markers, then passes the draft to a citations agent (Haiku) for surgical footnote insertion. The final cited report is saved to a markdown file.
+Runs a multi-agent research pipeline modelled on Claude.ai's Deep Research feature. A lead agent subagent (Sonnet, spawned via Agent tool) plans the research, launches parallel `claude -p` research subprocesses (Haiku) via Bash, synthesises their findings into a draft report with `[^?]` citation markers, then launches a `claude -p` citations subprocess (Haiku) for surgical footnote insertion. The main session invokes the lead agent and waits. The final cited report is saved to a markdown file.
 
 ## Variables
 
@@ -19,8 +19,8 @@ DEFAULT_OUTPUT_DIR: ~/research
 ## Instructions
 
 1. Read `references/lead-agent.md` — this is the prompt for the lead agent
-2. Read `references/subagent.md` — the lead agent passes this verbatim to each research subagent
-3. Read `references/citations-agent.md` — the lead agent passes this to the citations agent
+2. Read `references/subagent.md` and resolve its absolute path — included in the task context passed to the lead agent, which uses it as `--system-prompt-file` when launching research subprocesses
+3. Read `references/citations-agent.md` and resolve its absolute path — same: passed to lead agent in task context for use as `--system-prompt-file` with the citations subprocess
 
 ## Workflow
 
@@ -58,11 +58,9 @@ Tell the user:
 
 **5. Spawn lead agent**
 
-Read `references/lead-agent.md` and `references/subagent.md`. Invoke the Agent tool with:
+Invoke the Agent tool with:
 - `model`: the resolved LEAD_MODEL
-- `prompt`: the full contents of `references/lead-agent.md`, followed by the task context block below
-
-The task context block to append:
+- `prompt`: the full contents of `references/lead-agent.md` (with `{CURRENT_DATE}` substituted with `{DATE}`), followed by this task context block:
 
 ```
 ---
@@ -73,33 +71,14 @@ Research query: {QUERY}
 Draft output path: {DRAFT_PATH}
 Final output path: {OUTPUT_PATH}
 Tmp directory: {TMP_DIR}
-Subagent model: {SUBAGENT_MODEL}
-Citations model: {CITATIONS_MODEL}
-
-Subagent prompt — pass this verbatim to each Agent tool call for research subagents, appending the specific task description and assigned tmp filepath at the end:
----
-{full contents of references/subagent.md}
----
+Absolute path to subagent.md: {ABS_PATH_SUBAGENT_MD}
+Absolute path to citations-agent.md: {ABS_PATH_CITATIONS_MD}
 </task_context>
-
-Your research query is: {QUERY}
 ```
 
-Wait for the lead agent to complete. It will write `{DRAFT_PATH}` before finishing.
+The lead agent handles all research, synthesis, and citations internally. Wait for it to complete — it writes the final cited report to `{OUTPUT_PATH}` before finishing.
 
-**6. Spawn citations agent**
-
-Read `references/citations-agent.md`. Invoke the Agent tool with:
-- `model`: `claude-haiku-4-5-20251001`
-- `prompt`: the full contents of `references/citations-agent.md`, with `{TASK_CONTEXT}` replaced by:
-
-```
-Resolve all [^?] markers in the draft report and add citations. Draft report path: {DRAFT_PATH}. Subagent source files are in: {TMP_DIR}. Write the final cited report to: {OUTPUT_PATH}.
-```
-
-Wait for the citations agent to complete.
-
-**7. Cleanup and confirm**
+**6. Cleanup and confirm**
 
 ```bash
 rm -rf {TMP_DIR}
