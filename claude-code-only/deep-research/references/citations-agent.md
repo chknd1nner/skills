@@ -34,6 +34,4 @@ Your task is to enhance trust in the report by replacing `[^?]` placeholder mark
 
 **Your task context:**
 
-<task_context>
-{TASK_CONTEXT}
-</task_context>
+Your task is in the user message. It contains the draft report path, the tmp directory path with subagent source files, and the final output path.
