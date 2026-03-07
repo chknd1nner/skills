@@ -54,7 +54,7 @@ Increase for large controversial threads where breadth matters; decrease for sim
 
 2. `fetch.py` auto-installs `beautifulsoup4` and `requests` on first run. If installs fail, see `references/troubleshooting.md`.
 
-3. **Share links** (`reddit.com/r/sub/s/XXXXXXX`) cannot be resolved — they redirect through reddit.com which is blocked. See Scenario 4.
+3. **Share links** (`reddit.com/r/sub/s/XXXXXXX`) are supported via `live-share`. Extract the subreddit and token from the URL and use Scenario 4.
 
 4. When in doubt about which command to use, the choice is simple: use `live-post` for a specific post, `live-browse` to see what's happening in a subreddit, `live-comments` for a comment thread.
 
@@ -115,12 +115,17 @@ Increase for large controversial threads where breadth matters; decrease for sim
 
 ### Scenario 4: User provides a mobile share link (/s/ URL)
 
-- **IF**: The URL contains `/r/sub/s/XXXXXXX` (Reddit mobile share format)
-- **THEN**:
-  1. Explain that share links redirect through reddit.com which is blocked, and Redlib cannot resolve them
-  2. Ask for the post title or a keyword, or ask them to open on desktop and share the full URL
-- **EXAMPLE RESPONSE**:
-  > "That's a mobile share link — I can't resolve it since it routes through reddit.com which is blocked. Do you know the post title or the subreddit it's from? If you can share the full desktop URL (it'll have `/comments/` in it), I can read it directly."
+- **IF**: The URL contains `/r/sub/s/XXXXXXX` (Reddit mobile share format — works for both post and comment share links)
+- **THEN**: Extract the subreddit name and share token from the URL, then use `live-share`
+- **COMMANDS**:
+  ```bash
+  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-share SUBREDDIT SHARE_TOKEN
+  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-share SUBREDDIT SHARE_TOKEN --comments 20
+  ```
+- **EXAMPLES**:
+  - URL `https://www.reddit.com/r/claudexplorers/s/LBwofUPUb2` → subreddit=`claudexplorers`, token=`LBwofUPUb2`
+  - "Can you read this? https://reddit.com/r/AskReddit/s/ABC123XYZ" → `live-share AskReddit ABC123XYZ`
+- **NOTE — comment share links**: If the share link points to a specific comment, Redlib will load only that comment's thread context rather than the full discussion. The post header and ID will still be shown. To read the full discussion, follow up with `live-post POST_ID --comments N` using the ID from the output.
 
 ### Scenario 5: Troubleshooting
 
