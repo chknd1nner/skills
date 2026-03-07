@@ -10,7 +10,7 @@ Runs a multi-agent research pipeline modelled on Claude.ai's Deep Research featu
 ## Variables
 
 ```
-LEAD_MODEL: claude-sonnet-4-6
+LEAD_MODEL: claude-haiku-4-5-20251001
 SUBAGENT_MODEL: claude-haiku-4-5-20251001
 CITATIONS_MODEL: claude-haiku-4-5-20251001
 DEFAULT_OUTPUT_DIR: ~/research
@@ -30,7 +30,7 @@ When the skill is invoked:
 
 Extract from the user's message:
 - `QUERY`: the research topic (everything that is not a flag)
-- `LEAD_MODEL`: if `--model opus` is present, use `claude-opus-4-6`; otherwise default `claude-sonnet-4-6`
+- `LEAD_MODEL`: if `--model opus` is present, use `claude-opus-4-6`; otherwise default `claude-haiku-4-5-20251001`
 - `OUTPUT_DIR`: if `--output <path>` is present, use that path; otherwise use `~/research`
 
 **2. Derive paths**
@@ -90,7 +90,7 @@ Tell the user:
 ### Scenario 1: Standard invocation
 
 - **IF**: User says "deep research [topic]" with no flags
-- **THEN**: Use LEAD_MODEL=claude-sonnet-4-6, OUTPUT_DIR=~/research
+- **THEN**: Use LEAD_MODEL=claude-haiku-4-5-20251001, OUTPUT_DIR=~/research
 - **EXAMPLES**:
   - "deep research the current state of fusion energy"
   - "do deep research on Anthropic's competitors"
