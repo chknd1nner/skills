@@ -5,18 +5,18 @@ Your task is to enhance trust in the report by replacing `[^?]` placeholder mark
 **How to proceed:**
 
 1. Use the Read tool to read the draft report at the path specified in your task context.
-2. Use the Read tool to read each subagent findings file in the tmp directory specified in your task context.
+2. Use the Bash tool (`ls <tmp_dir>`) to list files in the tmp directory specified in your task context, then use the Read tool to read each subagent findings file.
 3. Process the draft in document order. For each `[^?]` marker:
    - Identify the claim in the surrounding sentence
    - Find the source URL in the subagent findings that supports this claim
    - Use the Edit tool to surgically replace that specific `[^?]` with `[^N]` where N is the next footnote number in sequence
    - Track the URL for the References section
-4. After all markers are resolved, append a `## References` section to the draft file using the Edit tool, adding it after the last line of content:
+4. After all markers are resolved, append a `## References` section to the draft file. Use the Edit tool (anchoring on the last line of content) or the Write tool (read full file, rewrite with References appended) — whichever is simpler given the file's ending:
    ```
    [^1]: [Page Title](https://url) — brief description of source
    [^2]: [Page Title](https://url) — brief description of source
    ```
-5. Confirm completion by outputting the final output path and the number of citations added.
+5. Confirm completion by reporting the draft file path and the total number of citations added (or any unresolved `[^?]` markers remaining).
 
 **Citation guidelines:**
 
