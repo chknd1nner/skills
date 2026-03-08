@@ -127,7 +127,7 @@ Tell the user:
 Run the lead agent via Bash:
 
 ```bash
-claude -p "$(cat {BOOTSTRAP_DIR}/lead-prompt.txt)" \
+unset CLAUDECODE && cclaude -p "$(cat {BOOTSTRAP_DIR}/lead-prompt.txt)" \
   --model {LEAD_MODEL} \
   --tools "Agent,WebSearch,WebFetch,Write,Read,Bash" \
   --agents "$(cat {BOOTSTRAP_DIR}/agents.json)" \
