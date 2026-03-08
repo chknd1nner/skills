@@ -14,8 +14,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$MODE" == "formatted" || "$MODE" == "by-scope" ]]; then
+  echo "Error: --${MODE} mode is not yet implemented. Use --raw or no flag." >&2
+  exit 1
+fi
+
 PROJECT_DIR="${PWD}"
 HOME_DIR="${HOME}"
+
+# Shared settings file locations (scope:path)
+declare -a ALL_SETTINGS_FILES=(
+  "project:${PROJECT_DIR}/.claude/settings.json"
+  "local:${PROJECT_DIR}/.claude/settings.local.json"
+  "user:${HOME_DIR}/.claude/settings.json"
+  "enterprise:/etc/claude/settings.json"
+  "managed:${HOME_DIR}/.claude/managed/settings.json"
+)
 
 # Helper: print a section header/footer
 section_start() { echo "=== $1 ==="; }
@@ -45,16 +59,8 @@ safe_jq() {
 ###############################################################################
 section_start "SETTINGS"
 
-declare -a settings_files=(
-  "project:${PROJECT_DIR}/.claude/settings.json"
-  "local:${PROJECT_DIR}/.claude/settings.local.json"
-  "user:${HOME_DIR}/.claude/settings.json"
-  "enterprise:/etc/claude/settings.json"
-  "managed:${HOME_DIR}/.claude/managed/settings.json"
-)
-
 found_settings=0
-for entry in "${settings_files[@]}"; do
+for entry in "${ALL_SETTINGS_FILES[@]}"; do
   scope="${entry%%:*}"
   path="${entry#*:}"
   if [[ -f "$path" ]]; then
@@ -76,6 +82,7 @@ section_start "CLAUDE_MD"
 
 declare -a claudemd_files=(
   "project:${PROJECT_DIR}/CLAUDE.md"
+  "project:${PROJECT_DIR}/.claude/CLAUDE.md"
   "user:${HOME_DIR}/.claude/CLAUDE.md"
 )
 
@@ -112,34 +119,27 @@ fi
 ###############################################################################
 section_start "HOOKS"
 
-declare -a hook_settings_files=(
-  "project:${PROJECT_DIR}/.claude/settings.json"
-  "local:${PROJECT_DIR}/.claude/settings.local.json"
-  "user:${HOME_DIR}/.claude/settings.json"
-  "enterprise:/etc/claude/settings.json"
-  "managed:${HOME_DIR}/.claude/managed/settings.json"
-)
-
 found_hooks=0
-for entry in "${hook_settings_files[@]}"; do
+for entry in "${ALL_SETTINGS_FILES[@]}"; do
   scope="${entry%%:*}"
   path="${entry#*:}"
   if [[ -f "$path" ]]; then
-    # Check if hooks key exists
     has_hooks=$(jq -r 'has("hooks")' "$path" 2>/dev/null || echo "false")
     if [[ "$has_hooks" == "true" ]]; then
-      # Iterate over hook event types
+      # Schema: .hooks.EventType[i].matcher, .hooks.EventType[i].hooks[j].{type,command}
       while IFS= read -r event_type; do
         [[ -z "$event_type" ]] && continue
-        # Each event type has an array of hook configs
-        hook_count=$(jq -r ".hooks[\"${event_type}\"] | length" "$path" 2>/dev/null || echo "0")
-        for ((i=0; i<hook_count; i++)); do
+        group_count=$(jq -r ".hooks[\"${event_type}\"] | length" "$path" 2>/dev/null || echo "0")
+        for ((i=0; i<group_count; i++)); do
           matcher=$(jq -r ".hooks[\"${event_type}\"][$i].matcher // \"*\"" "$path" 2>/dev/null || echo "*")
-          command=$(jq -r ".hooks[\"${event_type}\"][$i].command // \"\"" "$path" 2>/dev/null || echo "")
-          # Truncate command to 60 chars
-          cmd_short="${command:0:60}"
-          echo "[${scope}] ${event_type} matcher=${matcher} cmd=${cmd_short}"
-          found_hooks=1
+          inner_count=$(jq -r ".hooks[\"${event_type}\"][$i].hooks | length" "$path" 2>/dev/null || echo "0")
+          for ((j=0; j<inner_count; j++)); do
+            hook_type=$(jq -r ".hooks[\"${event_type}\"][$i].hooks[$j].type // \"command\"" "$path" 2>/dev/null || echo "command")
+            command=$(jq -r ".hooks[\"${event_type}\"][$i].hooks[$j].command // .hooks[\"${event_type}\"][$i].hooks[$j].url // \"\"" "$path" 2>/dev/null || echo "")
+            cmd_short="${command:0:60}"
+            echo "[${scope}] ${event_type} matcher=${matcher} type=${hook_type} cmd=${cmd_short}"
+            found_hooks=1
+          done
         done
       done < <(jq -r '.hooks | keys[]' "$path" 2>/dev/null)
     fi
@@ -157,16 +157,8 @@ section_end "HOOKS"
 ###############################################################################
 section_start "MCP_SERVERS"
 
-declare -a mcp_settings_files=(
-  "project:${PROJECT_DIR}/.claude/settings.json"
-  "local:${PROJECT_DIR}/.claude/settings.local.json"
-  "user:${HOME_DIR}/.claude/settings.json"
-  "enterprise:/etc/claude/settings.json"
-  "managed:${HOME_DIR}/.claude/managed/settings.json"
-)
-
 found_mcp=0
-for entry in "${mcp_settings_files[@]}"; do
+for entry in "${ALL_SETTINGS_FILES[@]}"; do
   scope="${entry%%:*}"
   path="${entry#*:}"
   if [[ -f "$path" ]]; then
@@ -204,20 +196,17 @@ found_agents=0
 agent_md_paths=()
 
 # 5a. Agents from settings files
-for entry in "${settings_files[@]}"; do
+for entry in "${ALL_SETTINGS_FILES[@]}"; do
   scope="${entry%%:*}"
   path="${entry#*:}"
   if [[ -f "$path" ]]; then
-    has_agents=$(jq -r 'has(".agents") or has("agents")' "$path" 2>/dev/null || echo "false")
+    has_agents=$(jq -r 'has("agents")' "$path" 2>/dev/null || echo "false")
     if [[ "$has_agents" == "true" ]]; then
-      # Try both ".agents" and "agents" keys
-      for key in ".agents" "agents"; do
-        while IFS= read -r agent_name; do
-          [[ -z "$agent_name" ]] && continue
-          echo "[${scope}] ${agent_name} source=settings ${path}"
-          found_agents=1
-        done < <(jq -r ".[\"${key}\"] // {} | keys[]" "$path" 2>/dev/null)
-      done
+      while IFS= read -r agent_name; do
+        [[ -z "$agent_name" ]] && continue
+        echo "[${scope}] ${agent_name} source=settings ${path}"
+        found_agents=1
+      done < <(jq -r '.agents // {} | keys[]' "$path" 2>/dev/null)
     fi
   fi
 done
@@ -326,23 +315,42 @@ for skill_md in "${HOME_DIR}"/.claude/skills/*/SKILL.md; do
   found_skills=1
 done
 
-# 7c. Plugin skills
+# 7c. Plugin skills — only from enabled plugins
+# Build list of enabled plugin IDs from settings
+enabled_plugins=""
+if [[ -f "$user_settings" ]]; then
+  enabled_plugins=$(jq -r '.enabledPlugins // {} | to_entries[] | select(.value == true) | .key' "$user_settings" 2>/dev/null || true)
+fi
+
 if [[ -d "$plugin_cache_dir" ]]; then
-  while IFS= read -r skill_md; do
-    [[ -f "$skill_md" ]] || continue
-    # Extract skill name: for .../skills/<name>/SKILL.md use <name>,
-    # for .../<plugin>/<version>/SKILL.md use <plugin>
-    parent_dir=$(basename "$(dirname "$skill_md")")
-    grandparent_dir=$(basename "$(dirname "$(dirname "$skill_md")")")
-    if [[ "$grandparent_dir" == "skills" ]]; then
-      skill_name="$parent_dir"
-    else
-      # Version-dir pattern: <plugin>/<version>/SKILL.md
-      skill_name="$grandparent_dir"
-    fi
-    echo "[plugin] ${skill_name} ${skill_md}"
-    found_skills=1
-  done < <(find "$plugin_cache_dir" -name "SKILL.md" 2>/dev/null | sort -u)
+  for repo_dir in "$plugin_cache_dir"/*/; do
+    [[ -d "$repo_dir" ]] || continue
+    repo_name=$(basename "$repo_dir")
+    for plugin_dir in "$repo_dir"/*/; do
+      [[ -d "$plugin_dir" ]] || continue
+      plugin_name=$(basename "$plugin_dir")
+      plugin_id="${plugin_name}@${repo_name}"
+      # Skip disabled plugins
+      if [[ -n "$enabled_plugins" ]] && ! echo "$enabled_plugins" | grep -qF "$plugin_id"; then
+        continue
+      fi
+      # Find SKILL.md files within this plugin, excluding template dirs
+      while IFS= read -r skill_md; do
+        [[ -f "$skill_md" ]] || continue
+        # Skip template SKILL.md files
+        case "$skill_md" in */template/SKILL.md) continue ;; esac
+        parent_dir=$(basename "$(dirname "$skill_md")")
+        grandparent_dir=$(basename "$(dirname "$(dirname "$skill_md")")")
+        if [[ "$grandparent_dir" == "skills" ]]; then
+          skill_name="$parent_dir"
+        else
+          skill_name="$grandparent_dir"
+        fi
+        echo "[plugin:${plugin_id}] ${skill_name} ${skill_md}"
+        found_skills=1
+      done < <(find "$plugin_dir" -name "SKILL.md" 2>/dev/null | sort)
+    done
+  done
 fi
 
 if [[ $found_skills -eq 0 ]]; then
