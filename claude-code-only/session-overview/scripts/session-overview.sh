@@ -4,7 +4,7 @@ set -euo pipefail
 # session-overview.sh — Discover all Claude Code configuration affecting the current session.
 # Usage: session-overview.sh [--raw|--formatted|--by-scope]
 
-MODE="raw"
+MODE="formatted"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --raw)       MODE="raw"; shift ;;
@@ -13,11 +13,6 @@ while [[ $# -gt 0 ]]; do
     *)           echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
-
-if [[ "$MODE" == "formatted" || "$MODE" == "by-scope" ]]; then
-  echo "Error: --${MODE} mode is not yet implemented. Use --raw or no flag." >&2
-  exit 1
-fi
 
 PROJECT_DIR="${PWD}"
 HOME_DIR="${HOME}"
@@ -53,6 +48,11 @@ safe_jq() {
     jq -r "$@" "$file" 2>/dev/null || true
   fi
 }
+
+###############################################################################
+# Raw output collection — produces the machine-parseable format
+###############################################################################
+collect_raw() {
 
 ###############################################################################
 # 1. SETTINGS FILES
@@ -137,7 +137,7 @@ for entry in "${ALL_SETTINGS_FILES[@]}"; do
             hook_type=$(jq -r ".hooks[\"${event_type}\"][$i].hooks[$j].type // \"command\"" "$path" 2>/dev/null || echo "command")
             command=$(jq -r ".hooks[\"${event_type}\"][$i].hooks[$j].command // .hooks[\"${event_type}\"][$i].hooks[$j].url // \"\"" "$path" 2>/dev/null || echo "")
             cmd_short="${command:0:60}"
-            echo "[${scope}] ${event_type} matcher=${matcher} type=${hook_type} cmd=${cmd_short}"
+            echo "[${scope}] ${event_type} matcher=${matcher} type=${hook_type} cmd=${cmd_short} source=${path}"
             found_hooks=1
           done
         done
@@ -174,7 +174,7 @@ for entry in "${ALL_SETTINGS_FILES[@]}"; do
             transport="$alt_type"
           fi
         fi
-        echo "[${scope}] ${server_name} transport=${transport}"
+        echo "[${scope}] ${server_name} transport=${transport} source=${path}"
         found_mcp=1
       done < <(jq -r '.mcpServers | keys[]' "$path" 2>/dev/null)
     fi
@@ -277,7 +277,12 @@ if [[ -d "$plugin_cache_dir" ]]; then
       skill_name=$(basename "$skill_dir")
       plugin_id="${skill_name}@${repo_name}"
       status=$(plugin_status "$plugin_id")
-      echo "[user] ${plugin_id} status=${status} ${plugin_dir}${skill_name}/"
+      # Count skills in this plugin
+      skill_count=0
+      if [[ -d "$plugin_dir$skill_name" ]]; then
+        skill_count=$(find "$plugin_dir$skill_name" -name "SKILL.md" 2>/dev/null | grep -cv 'template/SKILL.md' || echo "0")
+      fi
+      echo "[user] ${plugin_id} status=${status} skills=${skill_count} ${plugin_dir}${skill_name}/"
       found_plugins=1
     done
   done
@@ -397,6 +402,518 @@ if [[ -f "$user_settings" ]]; then
   fi
 fi
 
-echo "[user] model=${model}"
+# Check permissions mode — .permissions can be a string or object
+permissions="default"
+for entry in "${ALL_SETTINGS_FILES[@]}"; do
+  scope="${entry%%:*}"
+  fpath="${entry#*:}"
+  if [[ -f "$fpath" ]]; then
+    perm_type=$(jq -r '.permissions | type // "null"' "$fpath" 2>/dev/null || echo "null")
+    if [[ "$perm_type" == "string" ]]; then
+      permissions=$(jq -r '.permissions' "$fpath" 2>/dev/null || echo "default")
+      break
+    elif [[ "$perm_type" == "object" ]]; then
+      permissions="custom"
+      break
+    fi
+  fi
+done
+
+echo "[user] model=${model} permissions=${permissions}"
 
 section_end "MODEL"
+
+} # end collect_raw
+
+###############################################################################
+# Formatting helpers
+###############################################################################
+HEADER_WIDTH=55
+
+# Print the main title bar
+print_title() {
+  local title="$1"
+  local prefix="═══ ${title} "
+  local pad_len=$(( HEADER_WIDTH - ${#prefix} ))
+  if (( pad_len < 3 )); then pad_len=3; fi
+  local pad=""
+  for ((k=0; k<pad_len; k++)); do pad+="═"; done
+  echo "${prefix}${pad}"
+  echo
+}
+
+# Print a section header: ── Name (count) ──────────────
+print_section_header() {
+  local title="$1"
+  local prefix="── ${title} "
+  local pad_len=$(( HEADER_WIDTH - ${#prefix} ))
+  if (( pad_len < 3 )); then pad_len=3; fi
+  local pad=""
+  for ((k=0; k<pad_len; k++)); do pad+="─"; done
+  echo "${prefix}${pad}"
+}
+
+###############################################################################
+# Extract a section from raw output (lines between === SECTION === and === END_SECTION ===)
+###############################################################################
+extract_section() {
+  local raw="$1"
+  local section="$2"
+  local in_section=0
+  local result=""
+  while IFS= read -r line; do
+    if [[ "$line" == "=== ${section} ===" ]]; then
+      in_section=1
+      continue
+    fi
+    if [[ "$line" == "=== END_${section} ===" ]]; then
+      in_section=0
+      continue
+    fi
+    if [[ $in_section -eq 1 ]]; then
+      if [[ -n "$result" ]]; then
+        result+=$'\n'"$line"
+      else
+        result="$line"
+      fi
+    fi
+  done <<< "$raw"
+  echo "$result"
+}
+
+###############################################################################
+# Formatted output mode
+###############################################################################
+output_formatted() {
+  local raw="$1"
+
+  print_title "Session Overview"
+
+  # -- Model (always shown) --
+  local model_data
+  model_data=$(extract_section "$raw" "MODEL")
+  local model_str="" permissions_str=""
+  if [[ -n "$model_data" && "$model_data" != "none" ]]; then
+    # Parse: [user] model=X permissions=Y
+    model_str=$(echo "$model_data" | sed -n 's/.*model=\([^ ]*\).*/\1/p' | head -1)
+    permissions_str=$(echo "$model_data" | sed -n 's/.*permissions=\([^ ]*\).*/\1/p' | head -1)
+  fi
+  model_str="${model_str:-default}"
+  permissions_str="${permissions_str:-default}"
+  print_section_header "Model"
+  echo " ${model_str} | permissions: ${permissions_str}"
+  echo
+
+  # -- CLAUDE.md Files --
+  local claudemd_data
+  claudemd_data=$(extract_section "$raw" "CLAUDE_MD")
+  if [[ -n "$claudemd_data" && "$claudemd_data" != "none" ]]; then
+    local count=0
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && (( count++ )) || true
+    done <<< "$claudemd_data"
+    print_section_header "CLAUDE.md Files (${count})"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      # Parse: [scope] N lines /path
+      local scope line_count fpath
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      line_count=$(echo "$line" | sed -n 's/.*\] \([0-9]*\) lines.*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*lines //p')
+      echo " [${scope}] (${line_count} lines)"
+      echo "   ${fpath}"
+    done <<< "$claudemd_data"
+    echo
+  fi
+
+  # -- Hooks --
+  local hooks_data
+  hooks_data=$(extract_section "$raw" "HOOKS")
+  if [[ -n "$hooks_data" && "$hooks_data" != "none" ]]; then
+    local count=0
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && (( count++ )) || true
+    done <<< "$hooks_data"
+    print_section_header "Hooks (${count})"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      # Parse: [scope] EventType matcher=X type=Y cmd=Z source=/path
+      local scope event_type hook_type cmd_short source_path
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      event_type=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      hook_type=$(echo "$line" | sed -n 's/.*type=\([^ ]*\).*/\1/p')
+      cmd_short=$(echo "$line" | sed -n 's/.*cmd=\(.*\) source=.*/\1/p')
+      source_path=$(echo "$line" | sed -n 's/.*source=\(.*\)/\1/p')
+      echo " [${scope}] ${event_type} → type:${hook_type} cmd:${cmd_short}"
+      if [[ -n "$source_path" ]]; then
+        echo "   ${source_path}"
+      fi
+    done <<< "$hooks_data"
+    echo
+  fi
+
+  # -- MCP Servers --
+  local mcp_data
+  mcp_data=$(extract_section "$raw" "MCP_SERVERS")
+  if [[ -n "$mcp_data" && "$mcp_data" != "none" ]]; then
+    local count=0
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && (( count++ )) || true
+    done <<< "$mcp_data"
+    print_section_header "MCP Servers (${count})"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      # Parse: [scope] name transport=X source=/path
+      local scope server_name transport source_path
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      server_name=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      transport=$(echo "$line" | sed -n 's/.*transport=\([^ ]*\).*/\1/p')
+      source_path=$(echo "$line" | sed -n 's/.*source=\(.*\)/\1/p')
+      echo " [${scope}] ${server_name} (${transport})"
+      if [[ -n "$source_path" ]]; then
+        echo "   ${source_path}"
+      fi
+    done <<< "$mcp_data"
+    echo
+  fi
+
+  # -- Skills --
+  local skills_data
+  skills_data=$(extract_section "$raw" "SKILLS")
+  if [[ -n "$skills_data" && "$skills_data" != "none" ]]; then
+    local count=0
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && (( count++ )) || true
+    done <<< "$skills_data"
+    print_section_header "Skills (${count})"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      # Parse: [scope] skill_name /path
+      local scope skill_name fpath
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      skill_name=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/^\[[^]]*\] [^ ]* //p')
+      echo " [${scope}] ${skill_name}"
+      echo "   ${fpath}"
+    done <<< "$skills_data"
+    echo
+  fi
+
+  # -- Plugins --
+  local plugins_data
+  plugins_data=$(extract_section "$raw" "PLUGINS")
+  if [[ -n "$plugins_data" && "$plugins_data" != "none" ]]; then
+    local count=0
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && (( count++ )) || true
+    done <<< "$plugins_data"
+    print_section_header "Plugins (${count})"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      # Parse: [user] plugin_id status=X skills=N /path
+      local plugin_id status fpath
+      plugin_id=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      status=$(echo "$line" | sed -n 's/.*status=\([^ ]*\).*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*skills=[0-9]* //p')
+      echo " ${plugin_id} (${status})"
+      if [[ -n "$fpath" ]]; then
+        echo "   ${fpath}"
+      fi
+    done <<< "$plugins_data"
+    echo
+  fi
+
+  # -- Agents --
+  local agents_data
+  agents_data=$(extract_section "$raw" "AGENTS")
+  if [[ -n "$agents_data" && "$agents_data" != "none" ]]; then
+    local count=0
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && (( count++ )) || true
+    done <<< "$agents_data"
+    print_section_header "Agents (${count})"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      # Parse: [scope] name source=file|settings /path
+      local scope agent_name source_type fpath
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      agent_name=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      source_type=$(echo "$line" | sed -n 's/.*source=\([^ ]*\).*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*source=[^ ]* //p')
+      echo " [${scope}] ${agent_name} (${source_type})"
+      if [[ -n "$fpath" ]]; then
+        echo "   ${fpath}"
+      fi
+    done <<< "$agents_data"
+    echo
+  fi
+
+  # -- Auto-Memory --
+  local memory_data
+  memory_data=$(extract_section "$raw" "AUTO_MEMORY")
+  if [[ -n "$memory_data" && "$memory_data" != "none" ]]; then
+    print_section_header "Auto-Memory"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      # Parse: [project] N lines filename /path
+      local line_count filename fpath
+      line_count=$(echo "$line" | sed -n 's/.*\] \([0-9]*\) lines.*/\1/p')
+      filename=$(echo "$line" | sed -n 's/.*lines \([^ ]*\) .*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*lines [^ ]* //p')
+      echo " ${filename} (${line_count} lines)"
+      echo "   ${fpath}"
+    done <<< "$memory_data"
+    echo
+  fi
+
+  # -- Settings Files --
+  local settings_data
+  settings_data=$(extract_section "$raw" "SETTINGS")
+  if [[ -n "$settings_data" && "$settings_data" != "none" ]]; then
+    print_section_header "Settings Files"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      # Parse: [scope] settings /path
+      local scope fpath
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*settings //p')
+      printf " [%-10s %s\n" "${scope}]" "${fpath}"
+    done <<< "$settings_data"
+    echo
+  fi
+}
+
+###############################################################################
+# By-scope output mode
+###############################################################################
+output_by_scope() {
+  local raw="$1"
+
+  print_title "Session Overview"
+
+  # Collect items per scope. We use temp files for bash 3 compat.
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  trap "rm -rf '$tmpdir'" EXIT
+
+  # Initialize scope files
+  touch "$tmpdir/project" "$tmpdir/user" "$tmpdir/local" "$tmpdir/enterprise" "$tmpdir/managed" "$tmpdir/plugins"
+
+  # Helper to append to scope file
+  append_scope() {
+    local scope="$1"
+    shift
+    echo "$*" >> "$tmpdir/$scope"
+  }
+
+  # -- Model info (goes to user scope) --
+  local model_data
+  model_data=$(extract_section "$raw" "MODEL")
+  local model_str="" permissions_str=""
+  if [[ -n "$model_data" && "$model_data" != "none" ]]; then
+    model_str=$(echo "$model_data" | sed -n 's/.*model=\([^ ]*\).*/\1/p' | head -1)
+    permissions_str=$(echo "$model_data" | sed -n 's/.*permissions=\([^ ]*\).*/\1/p' | head -1)
+  fi
+  model_str="${model_str:-default}"
+  permissions_str="${permissions_str:-default}"
+  append_scope "user" "MODEL|Model: ${model_str}, permissions: ${permissions_str}"
+
+  # -- CLAUDE.md --
+  local claudemd_data
+  claudemd_data=$(extract_section "$raw" "CLAUDE_MD")
+  if [[ -n "$claudemd_data" && "$claudemd_data" != "none" ]]; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local scope line_count fpath
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      line_count=$(echo "$line" | sed -n 's/.*\] \([0-9]*\) lines.*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*lines //p')
+      append_scope "$scope" "CLAUDEMD|CLAUDE.md (${line_count} lines)|${fpath}"
+    done <<< "$claudemd_data"
+  fi
+
+  # -- Hooks --
+  local hooks_data
+  hooks_data=$(extract_section "$raw" "HOOKS")
+  if [[ -n "$hooks_data" && "$hooks_data" != "none" ]]; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local scope event_type cmd_short source_path
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      event_type=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      cmd_short=$(echo "$line" | sed -n 's/.*cmd=\(.*\) source=.*/\1/p')
+      source_path=$(echo "$line" | sed -n 's/.*source=\(.*\)/\1/p')
+      append_scope "$scope" "HOOKS|Hooks: ${event_type} → ${cmd_short}|${source_path}"
+    done <<< "$hooks_data"
+  fi
+
+  # -- MCP Servers --
+  local mcp_data
+  mcp_data=$(extract_section "$raw" "MCP_SERVERS")
+  if [[ -n "$mcp_data" && "$mcp_data" != "none" ]]; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local scope server_name transport source_path
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      server_name=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      transport=$(echo "$line" | sed -n 's/.*transport=\([^ ]*\).*/\1/p')
+      source_path=$(echo "$line" | sed -n 's/.*source=\(.*\)/\1/p')
+      append_scope "$scope" "MCP|MCP: ${server_name} (${transport})|${source_path}"
+    done <<< "$mcp_data"
+  fi
+
+  # -- Agents --
+  local agents_data
+  agents_data=$(extract_section "$raw" "AGENTS")
+  if [[ -n "$agents_data" && "$agents_data" != "none" ]]; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local scope agent_name source_type fpath
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      agent_name=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      source_type=$(echo "$line" | sed -n 's/.*source=\([^ ]*\).*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*source=[^ ]* //p')
+      append_scope "$scope" "AGENTS|Agents: ${agent_name}|${fpath}"
+    done <<< "$agents_data"
+  fi
+
+  # -- Skills (project and user only; plugin skills go to plugins scope) --
+  local skills_data
+  skills_data=$(extract_section "$raw" "SKILLS")
+  if [[ -n "$skills_data" && "$skills_data" != "none" ]]; then
+    # Collect skill names per scope for compact display
+    local project_skills="" user_skills=""
+    declare -A plugin_skills_map 2>/dev/null || true
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local scope skill_name
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      skill_name=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      if [[ "$scope" == "project" ]]; then
+        if [[ -n "$project_skills" ]]; then
+          project_skills+=", ${skill_name}"
+        else
+          project_skills="${skill_name}"
+        fi
+      elif [[ "$scope" == "user" ]]; then
+        if [[ -n "$user_skills" ]]; then
+          user_skills+=", ${skill_name}"
+        else
+          user_skills="${skill_name}"
+        fi
+      fi
+      # Plugin skills counted separately via PLUGINS section
+    done <<< "$skills_data"
+    if [[ -n "$project_skills" ]]; then
+      append_scope "project" "SKILLS|Skills: ${project_skills}"
+    fi
+    if [[ -n "$user_skills" ]]; then
+      append_scope "user" "SKILLS|Skills: ${user_skills}"
+    fi
+  fi
+
+  # -- Settings --
+  local settings_data
+  settings_data=$(extract_section "$raw" "SETTINGS")
+  if [[ -n "$settings_data" && "$settings_data" != "none" ]]; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local scope fpath
+      scope=$(echo "$line" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*settings //p')
+      append_scope "$scope" "SETTINGS|Settings: ${fpath}"
+    done <<< "$settings_data"
+  fi
+
+  # -- Auto-Memory (goes to project scope) --
+  local memory_data
+  memory_data=$(extract_section "$raw" "AUTO_MEMORY")
+  if [[ -n "$memory_data" && "$memory_data" != "none" ]]; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local line_count filename fpath
+      line_count=$(echo "$line" | sed -n 's/.*\] \([0-9]*\) lines.*/\1/p')
+      filename=$(echo "$line" | sed -n 's/.*lines \([^ ]*\) .*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*lines [^ ]* //p')
+      append_scope "project" "MEMORY|Memory: ${filename} (${line_count} lines)|${fpath}"
+    done <<< "$memory_data"
+  fi
+
+  # -- Render each non-empty scope --
+  local scope_label
+  for scope_key in project local user enterprise managed; do
+    [[ -s "$tmpdir/$scope_key" ]] || continue
+    case "$scope_key" in
+      project)    scope_label="Project" ;;
+      local)      scope_label="Local (.claude/settings.local.json)" ;;
+      user)       scope_label="User (~/.claude/)" ;;
+      enterprise) scope_label="Enterprise (/etc/claude/)" ;;
+      managed)    scope_label="Managed" ;;
+    esac
+    print_section_header "$scope_label"
+    while IFS= read -r entry; do
+      [[ -z "$entry" ]] && continue
+      local category rest fpath
+      # Split on | delimiter — field1|field2|field3
+      category="${entry%%|*}"
+      local after_cat="${entry#*|}"
+      if [[ "$after_cat" == *"|"* ]]; then
+        rest="${after_cat%%|*}"
+        fpath="${after_cat#*|}"
+      else
+        rest="$after_cat"
+        fpath=""
+      fi
+      echo " ${rest}"
+      if [[ -n "$fpath" ]]; then
+        echo "   ${fpath}"
+      fi
+    done < "$tmpdir/$scope_key"
+    echo
+  done
+
+  # -- Plugins scope --
+  local plugins_data
+  plugins_data=$(extract_section "$raw" "PLUGINS")
+  if [[ -n "$plugins_data" && "$plugins_data" != "none" ]]; then
+    print_section_header "Plugins"
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local plugin_id status skill_count fpath
+      plugin_id=$(echo "$line" | sed -n 's/^\[[^]]*\] \([^ ]*\) .*/\1/p')
+      status=$(echo "$line" | sed -n 's/.*status=\([^ ]*\).*/\1/p')
+      skill_count=$(echo "$line" | sed -n 's/.*skills=\([0-9]*\).*/\1/p')
+      fpath=$(echo "$line" | sed -n 's/.*skills=[0-9]* //p')
+      if [[ -n "$skill_count" && "$skill_count" != "0" ]]; then
+        echo " ${plugin_id} (${status}) — ${skill_count} skills"
+      else
+        echo " ${plugin_id} (${status})"
+      fi
+      if [[ -n "$fpath" ]]; then
+        echo "   ${fpath}"
+      fi
+    done <<< "$plugins_data"
+    echo
+  fi
+
+  rm -rf "$tmpdir"
+  trap - EXIT
+}
+
+###############################################################################
+# Main: collect raw, then output in requested mode
+###############################################################################
+
+RAW_OUTPUT=$(collect_raw)
+
+case "$MODE" in
+  raw)
+    echo "$RAW_OUTPUT"
+    ;;
+  formatted)
+    output_formatted "$RAW_OUTPUT"
+    ;;
+  by-scope)
+    output_by_scope "$RAW_OUTPUT"
+    ;;
+esac
