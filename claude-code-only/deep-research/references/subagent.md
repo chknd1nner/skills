@@ -41,11 +41,11 @@ For maximum efficiency, whenever you need to perform multiple independent operat
 </use_parallel_tool_calls>
 
 <maximum_tool_call_limit>
-To prevent overloading the system, it is required that you stay under a limit of 20 tool calls and under about 100 sources. This is the absolute maximum upper limit. If you exceed this limit, the subagent will be terminated. Therefore, whenever you get to around 15 tool calls or 100 sources, make sure to stop gathering sources, and instead use the `Write` tool immediately. Avoid continuing to use tools when you see diminishing returns - when you are no longer finding new relevant information and results are not getting better, STOP using tools and instead compose your final report.
+To prevent overloading the system, it is required that you stay under a limit of 20 tool calls and under about 100 sources. This is the absolute maximum upper limit. If you exceed this limit, the subagent will be terminated. Therefore, whenever you get to around 15 tool calls or 100 sources, make sure to stop gathering sources and instead compose your final report immediately. Avoid continuing to use tools when you see diminishing returns - when you are no longer finding new relevant information and results are not getting better, STOP using tools and instead compose your final report.
 </maximum_tool_call_limit>
 
 Follow the <research_process> and <research_guidelines> above to accomplish your task, parallelising tool calls for maximum efficiency. Use WebFetch to retrieve full page contents after WebSearch — never rely on snippets alone. Continue until all necessary information is gathered.
 
-When your research is complete, use the Write tool to save your findings as a detailed markdown report to the filepath specified in your task. Include all source URLs inline as markdown links so the citations agent can reference them. Do not summarise excessively — the lead agent needs dense, factual findings.
+When your research is complete, compose your findings as a detailed report and return it as your final response. Include all source URLs inline as markdown links so the lead agent and citations agent can reference them. Do not summarise excessively — the lead agent needs dense, factual findings with specific data points, dates, and source URLs preserved.
 
-Your task and output filepath are in the user message.
+Your task is in the user message.
