@@ -16,6 +16,7 @@ Live commands (Redlib):
   python fetch.py live-browse SUBREDDIT [--sort hot|new|rising|top]
   python fetch.py live-post POST_ID [--comments N]
   python fetch.py live-comments POST_ID [--limit N]
+  python fetch.py live-share SUBREDDIT SHARE_TOKEN [--comments N]
 """
 
 import sys
@@ -216,7 +217,7 @@ def redlib_get(path):
                 if any(ind in title_text.lower() for ind in error_indicators):
                     errors.append(f"{base}: Redlib error — {title_text}")
                     continue
-                return soup, base
+                return soup, base, r.url
             errors.append(f"{base}: got Anubis page despite solving")
         except Exception as e:
             errors.append(f"{base}: {e}")
@@ -752,7 +753,7 @@ def cmd_user_info(args):
 def cmd_live_browse(args):
     sort = args.sort or "hot"
     path = f"/r/{args.subreddit}/{sort}"
-    soup, base_url = redlib_get(path)
+    soup, base_url, _ = redlib_get(path)
     posts = parse_redlib_posts(soup)
     if not posts:
         page_title = soup.find("title")
@@ -777,7 +778,7 @@ def cmd_live_browse(args):
 def cmd_live_post(args):
     post_id = args.post_id.removeprefix("t3_")
     path = f"/comments/{post_id}"
-    soup, base_url = redlib_get(path)
+    soup, base_url, _ = redlib_get(path)
     post = parse_redlib_post_detail(soup)
     if not post:
         print(f"Could not parse post {post_id} from Redlib. HTML structure may have changed.")
@@ -810,7 +811,7 @@ def cmd_live_post(args):
 def cmd_live_comments(args):
     post_id = args.post_id.removeprefix("t3_")
     path = f"/comments/{post_id}"
-    soup, base_url = redlib_get(path)
+    soup, base_url, _ = redlib_get(path)
     comments, total = parse_redlib_comments(soup, args.limit)
     if not comments:
         page_title = soup.find("title")
@@ -822,6 +823,45 @@ def cmd_live_comments(args):
     for block in comments:
         print(block)
         print()
+
+
+def cmd_live_share(args):
+    path = f"/r/{args.subreddit}/s/{args.share_token}"
+    soup, base_url, final_url = redlib_get(path)
+    # Extract real post ID from the URL Redlib redirected to
+    m = _re.search(r'/comments/([a-z0-9]+)/', final_url)
+    if not m:
+        print(f"Could not resolve share link — Redlib did not redirect to a post URL. Got: {final_url}")
+        return
+    real_post_id = m.group(1)
+    post = parse_redlib_post_detail(soup)
+    if not post:
+        print(f"Could not parse post from share link. HTML structure may have changed.")
+        return
+
+    nsfw = " 🔞 NSFW" if post.get("over_18") else ""
+    flair = f" | **Flair:** {post['link_flair_text']}" if post.get("link_flair_text") else ""
+    ratio = f" | **Upvoted:** {post.get('upvote_ratio', 'N/A')}" if post.get("upvote_ratio") else ""
+
+    print(f"## {post['title']}{nsfw}")
+    print(f"**ID:** {real_post_id} | **Author:** u/{post['author']} | **r/{post['subreddit']}**{flair}")
+    print(f"**Score:** {post['score']} | **Comments:** {post['num_comments']} | **Posted:** {post['time_relative']}{ratio}")
+    print(f"**Source:** {base_url}/comments/{real_post_id}")
+
+    if post.get("body"):
+        print(f"\n{post['body']}")
+
+    if args.comments is not None:
+        print()
+        comments, total = parse_redlib_comments(soup, args.comments)
+        if comments:
+            print(f"---\n### Top {len(comments)} Comments (from {total} parsed, sorted by score)\n")
+            for block in comments:
+                print(block)
+                print()
+        else:
+            print("*No comments found.*")
+
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -883,6 +923,12 @@ def main():
     p_live_comments.add_argument("--limit", type=int, default=DEFAULT_COMMENT_LIMIT,
                                  help=f"Number of top comments (default: {DEFAULT_COMMENT_LIMIT})")
 
+    p_live_share = sub.add_parser("live-share", help="Resolve a mobile share link (/s/) and fetch the post")
+    p_live_share.add_argument("subreddit")
+    p_live_share.add_argument("share_token")
+    p_live_share.add_argument("--comments", type=int, metavar="N",
+                              help="Also fetch top N comments")
+
     p_sub_info = sub.add_parser("subreddit-info", help="Get subreddit metadata")
     p_sub_info.add_argument("subreddit")
 
@@ -893,7 +939,7 @@ def main():
     {"post": cmd_post, "comments": cmd_comments, "browse": cmd_browse,
      "search": cmd_search, "user": cmd_user,
      "live-browse": cmd_live_browse, "live-post": cmd_live_post,
-     "live-comments": cmd_live_comments,
+     "live-comments": cmd_live_comments, "live-share": cmd_live_share,
      "subreddit-info": cmd_subreddit_info, "user-info": cmd_user_info,
      }[args.cmd](args)
 

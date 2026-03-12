@@ -62,7 +62,7 @@ DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
 
 2. `fetch.py` auto-installs `curl_cffi`, `beautifulsoup4`, and `requests` on first run. If installs fail, see `references/troubleshooting.md`.
 
-3. **Share links** (`reddit.com/r/sub/s/XXXXXXX`) cannot be resolved — they redirect through reddit.com which is blocked. See Scenario 6.
+3. **Share links** (`reddit.com/r/sub/s/XXXXXXX`) are supported via `live-share`. Extract the subreddit and token from the URL and use Scenario 6.
 
 4. **Data freshness**: Arctic Shift ingests posts within ~36 hours. For content newer than that, use `live-*` commands. Score and comment counts may read as 1/0 on fresh archive content — this is normal.
 
@@ -97,6 +97,7 @@ DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
 | Historical posts | `browse` with `--after`/`--before` | Archive data |
 | Subreddit metadata | `subreddit-info` | Arctic Shift endpoint |
 | User profile stats | `user-info` | Arctic Shift endpoint |
+| Mobile share link (/s/) | `live-share` | Redlib resolves redirect |
 
 - **EXAMPLES**:
   - "What's hot in r/ClaudeAI?" → `live-browse`
@@ -168,13 +169,17 @@ DEFAULT_POST_LIMIT: 25      (posts returned for browse/search)
 
 ### Scenario 6: User provides a mobile share link (/s/ URL)
 
-- **IF**: The URL contains `/r/sub/s/XXXXXXX` (Reddit mobile share format)
-- **THEN**:
-  1. Explain that share links redirect through reddit.com which is blocked
-  2. Ask for the post title or a keyword to search for it, or ask them to open on desktop and share the full URL
-  3. Offer to search the subreddit by title keywords as a fallback
-- **EXAMPLE RESPONSE**:
-  > "That's a mobile share link — I can't resolve it since it routes through reddit.com which is blocked. Do you know the post title or a keyword from it? I can search the subreddit and find it that way."
+- **IF**: The URL contains `/r/sub/s/XXXXXXX` (Reddit mobile share format — works for both post and comment share links)
+- **THEN**: Extract the subreddit name and share token from the URL, then use `live-share`
+- **COMMANDS**:
+  ```bash
+  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-share SUBREDDIT SHARE_TOKEN
+  python3 /mnt/skills/user/fetch-reddit/scripts/fetch.py live-share SUBREDDIT SHARE_TOKEN --comments 20
+  ```
+- **EXAMPLES**:
+  - URL `https://www.reddit.com/r/claudexplorers/s/LBwofUPUb2` → subreddit=`claudexplorers`, token=`LBwofUPUb2`
+  - "Can you read this? https://reddit.com/r/AskReddit/s/ABC123XYZ" → `live-share AskReddit ABC123XYZ`
+- **NOTE — comment share links**: If the share link points to a specific comment, Redlib will load only that comment's thread context rather than the full discussion. The post header and ID will still be shown. To read the full discussion, follow up with `live-post POST_ID --comments N` using the ID from the output.
 
 ### Scenario 7: Fetch comments standalone
 
