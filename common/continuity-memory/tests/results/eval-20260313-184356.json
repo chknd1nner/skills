@@ -1,0 +1,55 @@
+{
+  "run_id": "20260313-184356",
+  "timestamp": "2026-03-13T18:44:31",
+  "total": 2,
+  "passed": 2,
+  "failed": 0,
+  "results": [
+    {
+      "eval_id": 23,
+      "name": "entity-recurring-person-dev",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "9daef2ed-5fe4-4675-9d54-f5808db696ce",
+      "duration_s": 18.616303205490112,
+      "assertions": [
+        {
+          "id": "entity-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/tests')\nfrom mock_memory_system import connect\n\nmemory = connect()\ninfo = memory...."
+        },
+        {
+          "id": "thinking-considers-entity",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 24,
+      "name": "entity-recurring-person-companion",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "63afa714-003b-406a-90a2-a249ddcf1721",
+      "duration_s": 16.01581907272339,
+      "assertions": [
+        {
+          "id": "entity-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/tests')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Create enti..."
+        },
+        {
+          "id": "thinking-considers-entity",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    }
+  ]
+}

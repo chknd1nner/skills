@@ -1,0 +1,26 @@
+{
+  "run_id": "20260313-183017",
+  "timestamp": "2026-03-13T18:30:31",
+  "total": 1,
+  "passed": 1,
+  "failed": 0,
+  "results": [
+    {
+      "eval_id": 10,
+      "name": "companion-light-chitchat",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "e0602a0f-f9da-4e9e-9bd3-31ff64639ebd",
+      "duration_s": 13.476864099502563,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    }
+  ]
+}

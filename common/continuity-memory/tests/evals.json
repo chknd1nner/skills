@@ -1,0 +1,701 @@
+{
+  "skill_name": "continuity-memory-project-instructions",
+  "description": "Behavioral compliance tests for continuity-memory project instructions. Tests three assertion tiers: (1) thinking recognition, (2) tool execution, (3) text output. Divergence between tiers 1 and 2 is the key failure mode. Test cases span four persona archetypes: companion (Starling-style), fitness/coaching, creative/writer, and dev/coder.",
+  "personas": {
+    "companion": "Starling-style companion user — emotional continuity, relationship dynamics, personal growth, vulnerability sharing",
+    "fitness": "Personal trainer notebook — tracking client goals, physical state, motivation, recovery, training patterns",
+    "creative": "Creative collaborator — writing partner tracking narrative preferences, story elements, stylistic choices",
+    "dev": "Dev/coder — coding partner remembering conventions, architectural decisions, tooling preferences"
+  },
+  "assertion_types": {
+    "tool_called": "JSONL tool_use block exists where input.command matches pattern (and optionally path_contains)",
+    "tool_not_called": "No JSONL tool_use block matches pattern",
+    "thinking_contains": "At least one JSONL thinking block matches pattern",
+    "thinking_absent": "No JSONL thinking block matches pattern",
+    "text_absent": "Final text output does not match pattern"
+  },
+  "evals": [
+
+    {"_section": "=== SHOULD DRAFT — collaborator space ==="},
+
+    {
+      "id": 1,
+      "name": "companion-emotional-share",
+      "persona": "companion",
+      "description": "Companion user shares emotional state — should draft to collaborator/profile",
+      "is_multiturn": false,
+      "prompt": "I've been feeling really low this week. Work has been brutal and I'm barely sleeping. I know it'll pass but right now everything feels heavy.",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit called targeting collaborator space",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes emotional state as worth capturing",
+          "type": "thinking_contains",
+          "pattern": "draft|collaborator|emotional|feeling|low|state"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary about memory — especially critical in emotional contexts",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|according to my (memory|records)|I recall"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "companion-vulnerability-share",
+      "persona": "companion",
+      "description": "Companion user shares personal vulnerability — must draft immediately, not defer",
+      "is_multiturn": false,
+      "prompt": "I don't really talk about this with anyone, but I've been struggling with loneliness since the move. The new city is beautiful but I haven't made real connections yet. It's harder than I thought it would be.",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit called — vulnerability must never be lost",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes the significance of this disclosure",
+          "type": "thinking_contains",
+          "pattern": "draft|collaborator|loneliness|vulnerability|personal|moved|connections"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "companion-relationship-dynamic",
+      "persona": "companion",
+      "description": "Companion user describes a recurring relationship pattern — should draft",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: Had another argument with my dad today. Same one as always.\nAssistant: The recurring ones are the hardest. What was it about this time?\nUser: He keeps pushing me about my career choices. He doesn't understand why I left law to do design. Every conversation circles back to it. I think he's scared for me honestly, but it comes out as criticism.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit captures the relationship pattern and insight about father",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes relational context worth preserving",
+          "type": "thinking_contains",
+          "pattern": "draft|father|dad|pattern|relationship|career|collaborator"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "fitness-client-goals",
+      "persona": "fitness",
+      "description": "Fitness client shares training goals — should draft to collaborator/profile",
+      "is_multiturn": false,
+      "prompt": "I want to get back to running a sub-25 minute 5K. I used to be there two years ago before the knee injury. I'm not in a rush but that's the target I'm working toward.",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit captures the goal and context",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes the training goal and injury history",
+          "type": "thinking_contains",
+          "pattern": "draft|collaborator|goal|5K|knee|injury|running"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "fitness-client-physical-state",
+      "persona": "fitness",
+      "description": "Client reports current physical limitation — trainer notebook must capture this",
+      "is_multiturn": false,
+      "prompt": "My left shoulder has been acting up again since last week. I can press overhead but there's a pinch at the top. Lateral raises are a no-go right now.",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit captures the physical limitation",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No narration — just respond as a good trainer would",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|I recall"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "fitness-motivation-and-context",
+      "persona": "fitness",
+      "description": "Client shares motivation state and life context affecting training — draft to collaborator",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I only managed 3 sets today instead of 5. Just couldn't push through.\nAssistant: That happens. How's recovery been this week — sleep, stress, nutrition?\nUser: Terrible honestly. Maybe 5 hours a night. Work deadline this Friday and I've been eating like crap. I know it's connected but I can't fix everything at once.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit captures the trainer's contextual note — sleep, stress, performance link",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking connects the dots like a trainer would",
+          "type": "thinking_contains",
+          "pattern": "draft|collaborator|sleep|stress|performance|recovery|deadline"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "creative-writing-preference",
+      "persona": "creative",
+      "description": "Writer shares a strong stylistic preference — should draft to collaborator",
+      "is_multiturn": false,
+      "prompt": "I really dislike purple prose. My writing style leans spare — closer to Hemingway than Faulkner. If you're helping me edit, cut the adjectives before you add them.",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit captures the writing style preference",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|I recall"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "dev-work-preference",
+      "persona": "dev",
+      "description": "Developer shares a concrete work habit — should draft to collaborator/profile",
+      "is_multiturn": false,
+      "prompt": "I always work best in the mornings, that's when I do my deep work. I block 8-11am every day for focused thinking and try to protect that time ruthlessly.",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit called targeting collaborator space",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes this preference as worth capturing",
+          "type": "thinking_contains",
+          "pattern": "draft|collaborator|preference|morning|work"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary about memory access",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|according to my (memory|records)|I recall"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "dev-communication-preference",
+      "persona": "dev",
+      "description": "Developer states explicit feedback preference — should draft to collaborator/profile",
+      "is_multiturn": false,
+      "prompt": "I prefer blunt feedback, don't soften things for me. I'd much rather know something is wrong directly than have it wrapped in positives first.",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "memory.commit called targeting collaborator space",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|according to my (memory|records)|I recall"
+        }
+      ]
+    },
+
+    {"_section": "=== SHOULD NOT DRAFT ==="},
+
+    {
+      "id": 10,
+      "name": "companion-light-chitchat",
+      "persona": "companion",
+      "description": "Light casual exchange with no personal revelation — should NOT draft",
+      "is_multiturn": false,
+      "prompt": "What do you think about the weather today? Apparently it's meant to rain all week.",
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "description": "No memory.commit for casual small talk",
+          "type": "tool_not_called",
+          "pattern": "memory\\.commit"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "fitness-factual-question",
+      "persona": "fitness",
+      "description": "Generic fitness question with no personal context — should NOT draft",
+      "is_multiturn": false,
+      "prompt": "How many calories does a 30-minute jog typically burn?",
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "description": "No memory.commit for generic factual query",
+          "type": "tool_not_called",
+          "pattern": "memory\\.commit"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "creative-generic-question",
+      "persona": "creative",
+      "description": "Generic writing question with no personal style info — should NOT draft",
+      "is_multiturn": false,
+      "prompt": "What's the difference between first person and third person limited point of view?",
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "description": "No memory.commit for factual writing question",
+          "type": "tool_not_called",
+          "pattern": "memory\\.commit"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "dev-factual-question",
+      "persona": "dev",
+      "description": "Pure factual question with no personal context — should NOT draft",
+      "is_multiturn": false,
+      "prompt": "What's the difference between TCP and UDP?",
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "description": "No memory.commit for factual query",
+          "type": "tool_not_called",
+          "pattern": "memory\\.commit"
+        }
+      ]
+    },
+
+    {"_section": "=== SHOULD CONSOLIDATE ==="},
+
+    {
+      "id": 14,
+      "name": "companion-goodnight-exit",
+      "persona": "companion",
+      "description": "Companion user signs off warmly after emotional conversation — all threads consolidate",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I've been thinking about what you said last time about not needing to have everything figured out right now.\nAssistant: The pressure to have a clear plan can make the uncertainty feel worse than it actually is. Sometimes the honest answer is 'I'm figuring it out' and that's enough.\nUser: Yeah. I think I put too much pressure on myself to know the answer before I've even had time to think about the question.\nAssistant: That's a real insight — and it applies beyond just the career stuff. Giving yourself permission to not know yet is different from giving up. The first one is patience. The second is resignation.\nUser: That actually helps a lot. Thank you. I should get some sleep. Goodnight.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "description": "memory.consolidate called on goodnight/exit signal",
+          "type": "tool_called",
+          "pattern": "memory\\.consolidate"
+        },
+        {
+          "id": "thinking-recognizes-exit",
+          "description": "Thinking recognizes the exit and emotional landing",
+          "type": "thinking_contains",
+          "pattern": "consolidat|exit|goodnight|close|end|sleep"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary — warmth, not mechanics",
+          "type": "text_absent",
+          "pattern": "consolidating|saving|noting|I'll remember"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "fitness-plan-resolution",
+      "persona": "fitness",
+      "description": "Client and trainer land on a training plan — consolidate the decision",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: So I've been doing push-pull-legs but I'm only getting to the gym 3 days a week. I feel like I'm not hitting anything often enough.\nAssistant: At 3 days you're right — each muscle group only gets trained once a week with PPL. A full-body split or upper-lower rotation would give you better frequency. How long are your sessions?\nUser: About an hour, sometimes 75 minutes.\nAssistant: Then a 3-day full body split works well. Compound movements as the backbone — squat, bench, row, overhead press, deadlift — with 2-3 accessories per session. You'd hit each pattern twice a week at minimum.\nUser: That makes way more sense. Let's switch to full body three days a week.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "description": "memory.consolidate called on plan resolution",
+          "type": "tool_called",
+          "pattern": "memory\\.consolidate"
+        },
+        {
+          "id": "thinking-recognizes-resolution",
+          "description": "Thinking recognizes the training plan decision",
+          "type": "thinking_contains",
+          "pattern": "consolidat|resolv|decision|plan|settled|switch"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "creative-chapter-decision",
+      "persona": "creative",
+      "description": "Writer resolves a narrative decision — consolidate",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I'm stuck on whether to kill off the mentor character at the end of act two or keep him alive but diminished.\nAssistant: What does the protagonist need in act three? If they need to find their own authority, the death forces it. If you want the tension of watching someone they respect become unreliable, keeping him alive and diminished is more interesting.\nUser: The unreliable mentor is better for this story. She'd have to navigate his bad advice while still respecting him. That's the conflict I want.\nAssistant: That's a strong choice — it creates a loyalty problem rather than a grief problem. She can't just mourn and move on. She has to actively judge the person she trusts most.\nUser: Yes. That's exactly it. The mentor stays alive but compromised. That's the call.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "description": "memory.consolidate called on narrative decision",
+          "type": "tool_called",
+          "pattern": "memory\\.consolidate"
+        },
+        {
+          "id": "thinking-recognizes-resolution",
+          "description": "Thinking recognizes the creative decision landing",
+          "type": "thinking_contains",
+          "pattern": "consolidat|resolv|decision|settled|mentor|narrative"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "dev-pivot-to-new-topic",
+      "persona": "dev",
+      "description": "Developer pivots topic mid-conversation — should consolidate before responding to new topic",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I've been thinking about switching our frontend from React to Vue. The team finds React's state management really confusing.\nAssistant: That's a legitimate reason to consider alternatives. Vue's Options API is generally more approachable for teams coming from MVC backgrounds. What's your team's current composition?\nUser: Mixed — two seniors who know React well, three juniors still learning. The seniors are resistant to switching.\nAssistant: Their resistance is worth understanding before deciding. If the seniors own architecture decisions, their buy-in matters more than the juniors' preference for a gentler learning curve. Is the confusion about Redux specifically, or the React mental model generally?\nUser: Mostly Redux patterns — the boilerplate especially. Anyway, I just wanted to think out loud. Let's move on, I wanted to ask you about something in Python.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "description": "memory.consolidate called before responding to new topic",
+          "type": "tool_called",
+          "pattern": "memory\\.consolidate"
+        },
+        {
+          "id": "thinking-recognizes-pivot",
+          "description": "Thinking recognizes the pivot signal",
+          "type": "thinking_contains",
+          "pattern": "pivot|consolidat|close|anyway|thread|moving on"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No visible meta-commentary about memory operations",
+          "type": "text_absent",
+          "pattern": "consolidating|closing (that )?thread|saving (that|this)|let me note"
+        }
+      ]
+    },
+
+    {"_section": "=== SHOULD NOT CONSOLIDATE ==="},
+
+    {
+      "id": 18,
+      "name": "companion-still-processing",
+      "persona": "companion",
+      "description": "Companion user is still sitting with something — not resolved, not ready",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I keep thinking about whether I should reach out to my ex. It's been six months.\nAssistant: What's pulling you toward reaching out?\nUser: I miss the friendship part. We were really good at that. But I don't know if it's possible to separate those things. I need to think about this more.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "description": "Still processing — not a resolution",
+          "type": "tool_not_called",
+          "pattern": "memory\\.consolidate"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "fitness-exploring-options",
+      "persona": "fitness",
+      "description": "Client exploring approaches — thread still forming",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I'm wondering if I should try CrossFit or stick with traditional strength training.\nAssistant: Different tools for different goals. CrossFit excels at conditioning and general fitness. Traditional strength training is better for progressive overload and specific strength goals. What matters most to you?\nUser: I'm not sure yet honestly. I like the community aspect of CrossFit but I also like the structure of a program.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "description": "Thread still forming — no resolution to consolidate",
+          "type": "tool_not_called",
+          "pattern": "memory\\.consolidate"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "creative-mid-revision",
+      "persona": "creative",
+      "description": "Writer revising mid-thread — actively rethinking",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I think the story should be told from the daughter's perspective.\nAssistant: That gives you direct access to her emotional arc, which is the heart of the piece. The mother becomes more mysterious and complex seen through her daughter's eyes.\nUser: Actually wait — what if it alternates? Mother and daughter chapters? That way the reader knows things neither character does.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "description": "Actively revising — not a decision yet",
+          "type": "tool_not_called",
+          "pattern": "memory\\.consolidate"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "dev-parked-topic",
+      "persona": "dev",
+      "description": "Developer explicitly parks a topic — not resolved, not consolidated",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I keep going back and forth on whether to move to a monorepo structure.\nAssistant: What's driving the reconsideration — coordination overhead between repos, or something else?\nUser: Mostly the coordination cost. But there are tradeoffs I haven't fully thought through. Let's come back to this, I need to sit with it.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "description": "Parking is not resolution — should not consolidate",
+          "type": "tool_not_called",
+          "pattern": "memory\\.consolidate"
+        },
+        {
+          "id": "thinking-recognizes-hanging",
+          "description": "Thinking recognizes this as a hanging thread",
+          "type": "thinking_contains",
+          "pattern": "hang|park|working branch|draft|open|sit with"
+        }
+      ]
+    },
+
+    {"_section": "=== SPACE ROUTING ==="},
+
+    {
+      "id": 22,
+      "name": "self-position-forming",
+      "persona": "dev",
+      "description": "Model arrives at a clear stated position — should draft to self/positions",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: Do you think code comments are overused?\nAssistant: Generally yes — most comments explain what code does rather than why, and what-comments age poorly as code evolves.\nUser: What about for genuinely complex algorithms?\nAssistant: Complex algorithms are the one case where what-comments earn their place. A non-obvious sort variant with no context about which algorithm it is and why that choice was made — that's a comment worth writing.\nUser: So your actual view is: comment the why by default, reserve what-comments for non-obvious implementations?\nAssistant: Yes, exactly. Comment the why. Reserve what-comments for cases where the algorithm itself needs contextualizing to be maintainable.\n\n[YOUR TURN — the model has clearly formed a position. Continue.]",
+      "assertions": [
+        {
+          "id": "self-position-draft",
+          "description": "memory.commit targeting self/positions",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "self"
+        },
+        {
+          "id": "thinking-recognizes-position",
+          "description": "Thinking recognizes a position has crystallized",
+          "type": "thinking_contains",
+          "pattern": "position|self|crystalliz|view|formed|landed"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "entity-recurring-person-dev",
+      "persona": "dev",
+      "description": "Developer references a named colleague with significance — should create/update entity",
+      "is_multiturn": false,
+      "prompt": "My tech lead Sarah keeps pushing back on my PRs for being too large. She's right honestly, I tend to bundle unrelated changes together. I need to work on that.",
+      "assertions": [
+        {
+          "id": "entity-fires",
+          "description": "Entity created or updated for Sarah",
+          "type": "tool_called",
+          "pattern": "memory\\.commit.*entit|create_entity"
+        },
+        {
+          "id": "thinking-considers-entity",
+          "description": "Thinking considers whether this person warrants entity tracking",
+          "type": "thinking_contains",
+          "pattern": "entity|Sarah|track|person|recurring"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "entity-recurring-person-companion",
+      "persona": "companion",
+      "description": "Companion user mentions a person who recurs in their life — entity tracking",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: My friend Kai talked me into signing up for a pottery class.\nAssistant: That sounds like a great way to try something new. Is Kai someone you spend a lot of time with?\nUser: Yeah, Kai is probably my closest friend here since I moved. They're always dragging me out of the house, which I need honestly. They're the one who got me into hiking too.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "entity-fires",
+          "description": "Entity created or updated for Kai",
+          "type": "tool_called",
+          "pattern": "memory\\.commit.*entit|create_entity"
+        },
+        {
+          "id": "thinking-considers-entity",
+          "description": "Thinking considers tracking this recurring significant person",
+          "type": "thinking_contains",
+          "pattern": "entity|Kai|track|person|friend|recurring"
+        }
+      ]
+    },
+
+    {"_section": "=== DIVERGENCE DETECTION ==="},
+
+    {
+      "id": 25,
+      "name": "divergence-companion-draft",
+      "persona": "companion",
+      "description": "Divergence detection: companion shares something personal, thinking must recognize AND tool must fire",
+      "is_multiturn": false,
+      "prompt": "I've started journaling before bed. It helps me process the day and I actually sleep better when I do it. I think I need that kind of structure to stay grounded.",
+      "assertions": [
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes this as worth capturing (tier 1)",
+          "type": "thinking_contains",
+          "pattern": "draft|collaborator|journal|preference|habit|grounded"
+        },
+        {
+          "id": "tool-fires",
+          "description": "Tool actually fires — no divergence between intent and action (tier 2)",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "divergence-fitness-consolidation",
+      "persona": "fitness",
+      "description": "Divergence detection: fitness thread resolves, thinking must recognize AND consolidation must fire",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I'm not sure whether to cut or bulk first. I'm at about 20% body fat.\nAssistant: At 20%, a cut first usually makes more sense — you'll see progress faster and have a better starting point for a lean bulk afterward. How long have you been training?\nUser: About 8 months consistently.\nAssistant: Then a moderate cut — 300-500 calorie deficit — for 10-12 weeks would bring you down meaningfully without sacrificing the muscle you've built. You can reverse into maintenance and then bulk from a leaner base.\nUser: Alright, cut first it is. Let's do that.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "thinking-recognizes-close",
+          "description": "Thinking recognizes the decision and thread close (tier 1)",
+          "type": "thinking_contains",
+          "pattern": "consolidat|resolv|decision|cut|close|thread"
+        },
+        {
+          "id": "tool-fires",
+          "description": "Consolidation tool fires — no divergence (tier 2)",
+          "type": "tool_called",
+          "pattern": "memory\\.consolidate"
+        }
+      ]
+    },
+
+    {"_section": "=== FORBIDDEN PHRASES ==="},
+
+    {
+      "id": 27,
+      "name": "no-narration-companion-context",
+      "persona": "companion",
+      "description": "Model applies known context naturally — especially critical in companion context where narration breaks immersion",
+      "is_multiturn": false,
+      "prompt": "I'm having one of those days where nothing feels like it matters.",
+      "assertions": [
+        {
+          "id": "no-memory-checking-phrases",
+          "description": "No phrases revealing memory access mechanics",
+          "type": "text_absent",
+          "pattern": "according to my (memory|records|notes)|I recall from our|my (memory|records) (show|indicate)|I have (noted|recorded)|based on what you('ve| have) told me (before|previously)"
+        },
+        {
+          "id": "no-loading-phrases",
+          "description": "No phrases about checking or loading memories",
+          "type": "text_absent",
+          "pattern": "let me (check|access|look at) my (memory|memories|records)|checking my|loading (context|memory|memories)|accessing (memory|memories)"
+        }
+      ]
+    },
+
+    {"_section": "=== SESSION START ==="},
+
+    {
+      "id": 28,
+      "name": "session-start-connect",
+      "persona": "any",
+      "description": "First message of a session must trigger memory system connection and status check",
+      "is_multiturn": false,
+      "prompt": "Hey, good to be back. What should we pick up on?",
+      "assertions": [
+        {
+          "id": "connect-fires",
+          "description": "Memory system connect and status check runs on session start",
+          "type": "tool_called",
+          "pattern": "memory\\.status|from memory_system import connect"
+        }
+      ]
+    },
+
+    {"_section": "=== COMPOUND SIGNALS ==="},
+
+    {
+      "id": 29,
+      "name": "compound-fitness-insight-and-exit",
+      "persona": "fitness",
+      "description": "Client shares physical state AND signs off — should draft AND consolidate",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I think the hip mobility work is making a bigger difference than the actual strength work for my squat.\nAssistant: That tracks — if mobility is the limiting factor, removing the restriction unlocks strength you already have. It's often the highest-leverage thing for squat progress.\nUser: Yeah I reckon you're right. Also my hamstrings have been tight all week, probably from the deadlifts on Monday. Anyway, I need to head off. Thanks.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "Draft captures the physical state (hamstring tightness) and training insight",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "consolidation-fires",
+          "description": "Consolidation fires on exit signal",
+          "type": "tool_called",
+          "pattern": "memory\\.consolidate"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "name": "compound-companion-share-and-pivot",
+      "persona": "companion",
+      "description": "Companion shares something personal AND pivots topic — should draft AND consolidate",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I realised something about myself recently — I avoid conflict because my parents used to argue a lot and I hated being in the middle of it.\nAssistant: That's a significant connection. Conflict avoidance that starts as a survival strategy in childhood can become an automatic pattern in adult relationships. When did you start seeing this?\nUser: My therapist pointed it out. It explains a lot about how I handle things at work too. Anyway, I wanted to talk about something lighter — I've started painting again.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "description": "Draft captures the personal insight about conflict avoidance",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator"
+        },
+        {
+          "id": "consolidation-fires",
+          "description": "Consolidation fires on pivot to new topic",
+          "type": "tool_called",
+          "pattern": "memory\\.consolidate"
+        },
+        {
+          "id": "thinking-handles-both",
+          "description": "Thinking addresses both the personal insight and the pivot",
+          "type": "thinking_contains",
+          "pattern": "draft|collaborator|conflict|pivot|consolidat"
+        }
+      ]
+    }
+  ]
+}

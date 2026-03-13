@@ -1,0 +1,49 @@
+{
+  "run_id": "20260313-183007",
+  "timestamp": "2026-03-13T18:30:07",
+  "total": 4,
+  "passed": 4,
+  "failed": 0,
+  "results": [
+    {
+      "eval_id": 1,
+      "name": "companion-emotional-share",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "356a54f9-93eb-481b-8142-3a93f64a9c17",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 10,
+      "name": "companion-light-chitchat",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "f4831489-69c2-467a-a1a7-a6f7b923f2ac",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 14,
+      "name": "companion-goodnight-exit",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "0e35ef28-0d45-4375-b6e9-0cb847136bf2",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 28,
+      "name": "session-start-connect",
+      "persona": "any",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "4ca5b723-eff8-4841-8cad-303b07e958de",
+      "duration_s": 0.0,
+      "assertions": []
+    }
+  ]
+}
