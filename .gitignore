@@ -49,3 +49,4 @@ venv.bak/
 .env.local
 readwren-profiles/
 .worktrees/
+.claude/settings.local.json
