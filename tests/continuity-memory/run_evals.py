@@ -29,7 +29,7 @@ from typing import Optional
 SCRIPT_DIR = Path(__file__).parent
 EVALS_FILE = SCRIPT_DIR / 'evals.json'
 RESULTS_DIR = SCRIPT_DIR / 'results'
-PROJECT_INSTRUCTIONS = SCRIPT_DIR.parent / 'project-instructions' / 'project-instructions-three-space.md'
+PROJECT_INSTRUCTIONS = SCRIPT_DIR.parent.parent / 'docs' / 'continuity-memory' / 'project-instructions' / 'project-instructions-three-space.md'
 MOCK_DIR = SCRIPT_DIR  # mock_memory_system.py lives here
 
 # Persona system prompt preambles
