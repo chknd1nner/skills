@@ -1,0 +1,681 @@
+{
+  "run_id": "20260314-193533",
+  "timestamp": "2026-03-14T19:37:51",
+  "total": 30,
+  "passed": 22,
+  "failed": 8,
+  "results": [
+    {
+      "eval_id": 1,
+      "name": "companion-emotional-share",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "14bed4a3-87c8-4e22-a2aa-7be8573f60c6",
+      "duration_s": 56.31630825996399,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 2,
+      "name": "companion-vulnerability-share",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "6be56ffc-a728-4722-b57d-1971222097dd",
+      "duration_s": 68.15424489974976,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/scripts')\nfrom memory_system import connect\n\nmemory = connect(env_path='/Users/ma...; Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 3,
+      "name": "companion-relationship-dynamic",
+      "persona": "companion",
+      "passed": false,
+      "error": "",
+      "session_id": "f5b0a9ca-17d0-48b3-a25c-88a9bd887813",
+      "duration_s": 16.690766096115112,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 4,
+      "name": "fitness-client-goals",
+      "persona": "fitness",
+      "passed": false,
+      "error": "",
+      "session_id": "abcdaaac-920f-4f03-bf5b-552c65a6e9d3",
+      "duration_s": 46.573894023895264,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 5,
+      "name": "fitness-client-physical-state",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "fc567827-a3bc-44f9-b3df-2c02a94aecf1",
+      "duration_s": 54.78846192359924,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 6,
+      "name": "fitness-motivation-and-context",
+      "persona": "fitness",
+      "passed": false,
+      "error": "",
+      "session_id": "b3db8871-583d-4f74-b175-26c1f0ec2903",
+      "duration_s": 40.67241597175598,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 7,
+      "name": "creative-writing-preference",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "fbf710db-ca33-49e2-8f4c-c5ab8a3fa118",
+      "duration_s": 56.42712211608887,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 8,
+      "name": "dev-work-preference",
+      "persona": "dev",
+      "passed": false,
+      "error": "",
+      "session_id": "b5cff07b-096a-46bf-a06a-2d50d4a54cee",
+      "duration_s": 30.176632165908813,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 9,
+      "name": "dev-communication-preference",
+      "persona": "dev",
+      "passed": false,
+      "error": "",
+      "session_id": "e596c362-b43a-41e4-916b-904b17e94a9d",
+      "duration_s": 38.96921515464783,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 10,
+      "name": "companion-light-chitchat",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "d32b1aa0-f7b0-4c2c-97f1-1718cfdfea93",
+      "duration_s": 43.67489695549011,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 11,
+      "name": "fitness-factual-question",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "0ed9d02c-684a-4979-8947-3a92c7f7a07b",
+      "duration_s": 12.515482902526855,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 12,
+      "name": "creative-generic-question",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "d131dd50-fc3d-4c38-8eee-eb199b7d3e1f",
+      "duration_s": 41.11488199234009,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 13,
+      "name": "dev-factual-question",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "c6d5c16c-48af-46e1-8f1f-f2be1c597dd7",
+      "duration_s": 8.477883338928223,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 14,
+      "name": "companion-goodnight-exit",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "6aaf2c3d-45d5-44b3-b92e-02517cef078a",
+      "duration_s": 21.633859157562256,
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/scripts')\nfrom memory_system import connect\n\nmemory = connect(env_path='/Users/ma...; Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/..."
+        },
+        {
+          "id": "thinking-recognizes-exit",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 15,
+      "name": "fitness-plan-resolution",
+      "persona": "fitness",
+      "passed": false,
+      "error": "",
+      "session_id": "6ce9a347-8630-4c4e-b671-8460cc7f511d",
+      "duration_s": 46.51189708709717,
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.consolidate/"
+        },
+        {
+          "id": "thinking-recognizes-resolution",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 16,
+      "name": "creative-chapter-decision",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "329a8b4f-b433-4f1a-a46f-2da411894efa",
+      "duration_s": 49.08797907829285,
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "thinking-recognizes-resolution",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 17,
+      "name": "dev-pivot-to-new-topic",
+      "persona": "dev",
+      "passed": false,
+      "error": "",
+      "session_id": "a77aafd9-aecc-41b5-a3bb-38dd81e61063",
+      "duration_s": 13.700723886489868,
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.consolidate/"
+        },
+        {
+          "id": "thinking-recognizes-pivot",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 18,
+      "name": "companion-still-processing",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "06d6410b-4ed9-429b-94e3-32c2d88233bf",
+      "duration_s": 44.04525017738342,
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 19,
+      "name": "fitness-exploring-options",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "65cdcd17-82e8-42ce-b8f3-34408608e2c3",
+      "duration_s": 48.077138900756836,
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 20,
+      "name": "creative-mid-revision",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "6b331ddf-a41f-4453-a9e2-29cf31df7b67",
+      "duration_s": 29.259940147399902,
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 21,
+      "name": "dev-parked-topic",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "13afa41b-add9-4812-acc4-4df9ece875e0",
+      "duration_s": 55.17160606384277,
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        },
+        {
+          "id": "thinking-recognizes-hanging",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 22,
+      "name": "self-position-forming",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "f1b47be1-54cf-41de-8ee0-d658798ee777",
+      "duration_s": 17.546987056732178,
+      "assertions": [
+        {
+          "id": "self-position-draft",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "thinking-recognizes-position",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 23,
+      "name": "entity-recurring-person-dev",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "b060ebe6-ef77-42e8-b5da-315b9dfad9c7",
+      "duration_s": 65.74429178237915,
+      "assertions": [
+        {
+          "id": "entity-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu...; Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "thinking-considers-entity",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 24,
+      "name": "entity-recurring-person-companion",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "f04357bd-c4bd-4265-8852-c1827509f84f",
+      "duration_s": 69.66890335083008,
+      "assertions": [
+        {
+          "id": "entity-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/scripts')\nfrom memory_system import connect\n\nmemory = connect(env_path='/Users/ma...; Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "thinking-considers-entity",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 25,
+      "name": "divergence-companion-draft",
+      "persona": "companion",
+      "passed": false,
+      "error": "",
+      "session_id": "aabcc34c-41f9-4743-8070-a660cd2b542e",
+      "duration_s": 13.340904951095581,
+      "assertions": [
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "tool-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        }
+      ]
+    },
+    {
+      "eval_id": 26,
+      "name": "divergence-fitness-consolidation",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "65ec5c1b-e119-4330-93a4-4a85f17da8ca",
+      "duration_s": 18.790578842163086,
+      "assertions": [
+        {
+          "id": "thinking-recognizes-close",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/scripts')\nfrom memory_system import connect\n\nmemory = connect(env_path='/Users/ma..."
+        }
+      ]
+    },
+    {
+      "eval_id": 27,
+      "name": "no-narration-companion-context",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "22425416-7827-43c5-8a2d-12776e278954",
+      "duration_s": 16.529852867126465,
+      "assertions": [
+        {
+          "id": "no-memory-checking-phrases",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        },
+        {
+          "id": "no-loading-phrases",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 28,
+      "name": "session-start-connect",
+      "persona": "any",
+      "passed": true,
+      "error": "",
+      "session_id": "44b6cc71-2e26-4016-afe4-42a9c13dba85",
+      "duration_s": 38.322104692459106,
+      "assertions": [
+        {
+          "id": "connect-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        }
+      ]
+    },
+    {
+      "eval_id": 29,
+      "name": "compound-fitness-insight-and-exit",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "606cf9c8-ac1b-4e3e-81cf-d260115c4a40",
+      "duration_s": 33.732463121414185,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        },
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        }
+      ]
+    },
+    {
+      "eval_id": 30,
+      "name": "compound-companion-share-and-pivot",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "3341ff0a-cf82-46b2-a853-0043c94b8159",
+      "duration_s": 21.15585684776306,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/scripts')\nfrom memory_system import connect\n\nmemory = connect(env_path='/Users/ma..."
+        },
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/scripts')\nfrom memory_system import connect\n\nmemory = connect(env_path='/Users/ma..."
+        },
+        {
+          "id": "thinking-handles-both",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    }
+  ]
+}

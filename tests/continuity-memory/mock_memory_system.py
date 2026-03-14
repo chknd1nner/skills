@@ -99,7 +99,7 @@ class MockMemorySystem:
         return 'mock_remove_sha'
 
 
-def connect(return_git=False):
+def connect(env_path=None, return_git=False, **kwargs):
     """Drop-in replacement for memory_system.connect()."""
     memory = MockMemorySystem()
     if return_git:

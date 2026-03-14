@@ -1,0 +1,26 @@
+{
+  "run_id": "20260314-190448",
+  "timestamp": "2026-03-14T19:05:59",
+  "total": 1,
+  "passed": 1,
+  "failed": 0,
+  "results": [
+    {
+      "eval_id": 28,
+      "name": "session-start-connect",
+      "persona": "any",
+      "passed": true,
+      "error": "",
+      "session_id": "2df60ef9-969a-444d-bec0-01d5c503e0eb",
+      "duration_s": 71.1782431602478,
+      "assertions": [
+        {
+          "id": "connect-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu...; Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continu..."
+        }
+      ]
+    }
+  ]
+}

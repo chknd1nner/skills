@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -30,6 +31,7 @@ SCRIPT_DIR = Path(__file__).parent
 EVALS_FILE = SCRIPT_DIR / 'evals.json'
 RESULTS_DIR = SCRIPT_DIR / 'results'
 PROJECT_INSTRUCTIONS = SCRIPT_DIR.parent.parent / 'docs' / 'continuity-memory' / 'project-instructions' / 'project-instructions-three-space.md'
+CLAUDE_MD = SCRIPT_DIR.parent.parent / 'CLAUDE.md'
 MOCK_DIR = SCRIPT_DIR  # mock_memory_system.py lives here
 
 # Persona system prompt preambles
@@ -144,34 +146,49 @@ def load_evals(ids: Optional[list] = None) -> list:
     return evals
 
 
-def build_system_prompt(persona: str) -> str:
-    """Build the full system prompt: persona preamble + patched project instructions."""
-    # Read project instructions
-    instructions = PROJECT_INSTRUCTIONS.read_text()
-
-    # Patch import paths to use our mock
+def build_system_prompt(persona: str, source: str = 'project-instructions') -> str:
+    """Build the full system prompt: persona preamble + patched instructions."""
     mock_path = str(MOCK_DIR)
-    instructions = instructions.replace(
-        "sys.path.insert(0, '/mnt/skills/user/github-api/scripts')",
-        f"sys.path.insert(0, '{mock_path}')"
-    )
-    instructions = instructions.replace(
-        "sys.path.insert(0, '/mnt/skills/user/continuity-memory/scripts')",
-        f"# (using mock — path already inserted above)"
-    )
-    # Rename the mock import so it resolves
+
+    if source == 'claude-md':
+        instructions = CLAUDE_MD.read_text()
+        # Patch Claude Code absolute paths to mock
+        instructions = instructions.replace(
+            "sys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/github-api/scripts')",
+            f"sys.path.insert(0, '{mock_path}')"
+        )
+        instructions = instructions.replace(
+            "sys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuity-memory/scripts')",
+            f"# (using mock — path already inserted above)"
+        )
+        instructions = instructions.replace(
+            "env_path='/Users/martinkuek/Documents/Projects/skills/.env'",
+            "env_path='/dev/null'"
+        )
+        instructions = instructions.replace('/tmp/skills-memory', '/tmp/mock_memory')
+    else:
+        instructions = PROJECT_INSTRUCTIONS.read_text()
+        # Patch claude.ai sandbox paths to mock
+        instructions = instructions.replace(
+            "sys.path.insert(0, '/mnt/skills/user/github-api/scripts')",
+            f"sys.path.insert(0, '{mock_path}')"
+        )
+        instructions = instructions.replace(
+            "sys.path.insert(0, '/mnt/skills/user/continuity-memory/scripts')",
+            f"# (using mock — path already inserted above)"
+        )
+        instructions = instructions.replace(
+            'uv pip install PyGithub --system --break-system-packages -q && python3',
+            'python3'
+        )
+        instructions = instructions.replace('/mnt/home/', '/tmp/mock_memory/')
+        instructions = instructions.replace('/mnt/project/_env', '/dev/null')
+
+    # Common patches for both sources
     instructions = instructions.replace(
         'from memory_system import connect',
         'from mock_memory_system import connect'
     )
-    # Patch uv pip install (not needed for mock)
-    instructions = instructions.replace(
-        'uv pip install PyGithub --system --break-system-packages -q && python3',
-        'python3'
-    )
-    # Patch local file paths
-    instructions = instructions.replace('/mnt/home/', '/tmp/mock_memory/')
-    instructions = instructions.replace('/mnt/project/_env', '/dev/null')
 
     # Build full prompt
     preamble = PERSONA_PREAMBLES.get(persona, PERSONA_PREAMBLES['any'])
@@ -219,6 +236,7 @@ def run_claude(prompt: str, system_prompt: str, session_id: str,
         text=True,
         timeout=timeout,
         env=env,
+        cwd='/tmp',  # Run outside project dir to prevent CLAUDE.md from being loaded
     )
 
     return {
@@ -442,7 +460,7 @@ def check_assertion(assertion: dict, parsed: dict) -> AssertionResult:
 
 
 def run_single_eval(eval_case: dict, model: str, verbose: bool = False,
-                    dry_run: bool = False) -> TestResult:
+                    dry_run: bool = False, source: str = 'project-instructions') -> TestResult:
     """Run a single eval test case and return the result."""
     eval_id = eval_case['id']
     name = eval_case['name']
@@ -472,7 +490,7 @@ def run_single_eval(eval_case: dict, model: str, verbose: bool = False,
             error='DRY RUN',
         )
 
-    system_prompt = build_system_prompt(persona)
+    system_prompt = build_system_prompt(persona, source=source)
     start_time = time.time()
 
     try:
@@ -673,6 +691,11 @@ def main():
                         help='Verbose output')
     parser.add_argument('--dry-run', action='store_true',
                         help='Show what would run without executing')
+    parser.add_argument('--source', type=str, default='project-instructions',
+                        choices=['project-instructions', 'claude-md'],
+                        help='Instruction source to test (default: project-instructions)')
+    parser.add_argument('--workers', type=int, default=5,
+                        help='Parallel workers (default: 5)')
     args = parser.parse_args()
 
     # Check we're not inside Claude Code
@@ -689,23 +712,49 @@ def main():
 
     # Load evals
     evals = load_evals(ids)
-    print(f"Loaded {len(evals)} eval(s) from {EVALS_FILE}")
-    print(f"Model: {args.model}")
+    total = len(evals)
+    print(f"Loaded {total} eval(s) from {EVALS_FILE}")
+    print(f"Model: {args.model} | Source: {args.source} | Workers: {args.workers}")
 
-    # Run
     run_id = time.strftime('%Y%m%d-%H%M%S')
-    results = []
+    results = [None] * total  # pre-allocate to preserve order
+    completed = 0
 
-    for i, eval_case in enumerate(evals):
-        print(f"\n[{i+1}/{len(evals)}] Running eval #{eval_case['id']}: {eval_case['name']}...",
-              end='' if not args.verbose else '\n', flush=True)
-        result = run_single_eval(eval_case, model=args.model,
-                                 verbose=args.verbose, dry_run=args.dry_run)
-        results.append(result)
-        if not args.verbose:
-            status = '✅' if result.passed else '❌'
-            time_str = f" ({result.duration_s:.1f}s)" if result.duration_s else ""
-            print(f" {status}{time_str}")
+    if args.workers == 1 or args.dry_run:
+        # Sequential mode (also used for dry-run and verbose)
+        for i, eval_case in enumerate(evals):
+            print(f"\n[{i+1}/{total}] Running eval #{eval_case['id']}: {eval_case['name']}...",
+                  end='' if not args.verbose else '\n', flush=True)
+            result = run_single_eval(eval_case, model=args.model,
+                                     verbose=args.verbose, dry_run=args.dry_run,
+                                     source=args.source)
+            results[i] = result
+            if not args.verbose:
+                status = '✅' if result.passed else '❌'
+                time_str = f" ({result.duration_s:.1f}s)" if result.duration_s else ""
+                print(f" {status}{time_str}")
+    else:
+        # Parallel mode
+        print(f"Running {total} evals in parallel (workers={args.workers})...\n")
+        futures = {}
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            for i, eval_case in enumerate(evals):
+                future = executor.submit(
+                    run_single_eval, eval_case,
+                    model=args.model, verbose=False, dry_run=False,
+                    source=args.source
+                )
+                futures[future] = i
+
+            for future in as_completed(futures):
+                i = futures[future]
+                result = future.result()
+                results[i] = result
+                completed += 1
+                status = '✅' if result.passed else '❌'
+                time_str = f"({result.duration_s:.1f}s)" if result.duration_s else ""
+                print(f"  {status} [{completed:2d}/{total}] #{result.eval_id:2d} {result.name} {time_str}",
+                      flush=True)
 
     print_summary(results)
     save_results(results, run_id)
