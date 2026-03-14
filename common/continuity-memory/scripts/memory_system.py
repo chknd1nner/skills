@@ -300,8 +300,8 @@ class MemorySystem:
             self.git.branch_create('working', 'main')
 
     def _resolve_path(self, path: str) -> str:
-        """Ensure path has .md extension."""
-        if not path.endswith('.md'):
+        """Ensure path has .md extension (skips paths that already have an extension)."""
+        if not os.path.splitext(os.path.basename(path))[1]:
             path = f'{path}.md'
         return path
 
