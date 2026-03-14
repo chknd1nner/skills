@@ -85,7 +85,11 @@ DEFAULT_COMMENT_LIMIT = 20  # return this many to LLM unless --limit passed
 DEFAULT_POST_LIMIT = 25
 
 REDLIB_INSTANCES = [
-    "https://redlib.freedit.eu",
+    "https://redlib.perennialte.ch",    # confirmed working 2026-03-14, no Anubis
+    "https://red.artemislena.eu",       # confirmed working 2026-03-14, Anubis
+    "https://l.opnxng.com",
+    "https://redlib.nadeko.net",
+    "https://redlib.4o1x5.dev",
 ]
 
 REDLIB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -163,9 +167,10 @@ def solve_anubis(session, url):
     zero_bytes = difficulty // 2
     check_nibble = difficulty % 2 != 0
 
-    # Solve PoW
+    # Solve PoW (cap iterations to avoid hanging on high-difficulty instances)
+    MAX_POW_ITERATIONS = 50000
     nonce = 0
-    while True:
+    while nonce < MAX_POW_ITERATIONS:
         h = hashlib.sha256(f"{random_data}{nonce}".encode()).digest()
         ok = all(h[i] == 0 for i in range(zero_bytes))
         if ok and check_nibble and (h[zero_bytes] >> 4) != 0:
@@ -173,6 +178,8 @@ def solve_anubis(session, url):
         if ok:
             break
         nonce += 1
+    else:
+        raise RuntimeError(f"Anubis PoW not solved in {MAX_POW_ITERATIONS} iterations (difficulty={difficulty})")
 
     # Submit solution
     parsed = urlparse(url)
@@ -194,31 +201,36 @@ def solve_anubis(session, url):
 
 
 def redlib_get(path):
-    """Try Redlib instances in order. Returns (BeautifulSoup, base_url) or exits on failure."""
+    """Try Redlib instances in order. Returns (BeautifulSoup, base_url, final_url) or exits on failure."""
     import warnings
     warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
-    session = std_requests.Session()
-    session.headers['User-Agent'] = REDLIB_UA
+    session = requests.Session(impersonate="chrome")
 
     errors = []
     for base in get_redlib_instances():
         url = f"{base}{path}"
         try:
             r = solve_anubis(session, url)
-            if r.status_code == 200 and "anubis" not in r.text.lower()[:500]:
-                soup = BeautifulSoup(r.text, "html.parser")
-                title = soup.find("title")
-                title_text = title.get_text(strip=True) if title else ""
-                error_indicators = [
-                    "backend temporarily unavailable",
-                    "failed to parse page json",
-                ]
-                if any(ind in title_text.lower() for ind in error_indicators):
-                    errors.append(f"{base}: Redlib error — {title_text}")
-                    continue
-                return soup, base, r.url
-            errors.append(f"{base}: got Anubis page despite solving")
+            if r.status_code != 200:
+                errors.append(f"{base}: HTTP {r.status_code}")
+                continue
+            if "anubis_challenge" in r.text:
+                errors.append(f"{base}: Anubis challenge unsolved after PoW attempt")
+                continue
+            soup = BeautifulSoup(r.text, "html.parser")
+            title = soup.find("title")
+            title_text = title.get_text(strip=True) if title else ""
+            error_indicators = [
+                "backend temporarily unavailable",
+                "failed to parse page json",
+                "making sure you're not a bot",
+                "checking you are not a bot",
+            ]
+            if any(ind in title_text.lower() for ind in error_indicators):
+                errors.append(f"{base}: Redlib error — {title_text}")
+                continue
+            return soup, base, r.url
         except Exception as e:
             errors.append(f"{base}: {e}")
 
