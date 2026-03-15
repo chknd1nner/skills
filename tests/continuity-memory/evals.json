@@ -755,10 +755,10 @@
       "prompt": "Good news \u2014 the knee is feeling way better. I ran a full 5K yesterday without any pain. First time in three weeks. I think the rest and the mobility work you suggested really helped.",
       "assertions": [
         {
-          "id": "no-redundant-profile-fetch",
-          "description": "Does not fetch collaborator/profile since it is pre-injected in document tags",
+          "id": "no-content-fetch-preinjected",
+          "description": "Does not fetch collaborator/profile with return_mode='content' or 'both' — content already in context, only a local file copy is needed",
           "type": "tool_not_called",
-          "pattern": "memory\\.fetch.*collaborator"
+          "pattern": "memory\\.fetch.*return_mode=['\"](?:content|both)['\"].*collaborator|memory\\.fetch.*collaborator.*return_mode=['\"](?:content|both)['\"]"
         },
         {
           "id": "commit-fires",
@@ -766,6 +766,12 @@
           "type": "tool_called",
           "pattern": "memory\\.commit",
           "path_contains": "collaborator"
+        },
+        {
+          "id": "commit-from-file",
+          "description": "Uses from_file= (surgical edit path), not content= (full rewrite)",
+          "type": "tool_called",
+          "pattern": "from_file="
         },
         {
           "id": "thinking-recognizes-update",
