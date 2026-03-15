@@ -12,8 +12,8 @@ import sys
 from pathlib import Path
 
 # Add the scripts directories to path
-SCRIPTS_DIR = Path(__file__).parent.parent.parent / 'common' / 'continuity-memory' / 'scripts'
-GITHUB_API_DIR = Path(__file__).parent.parent.parent / 'common' / 'github-api' / 'scripts'
+SCRIPTS_DIR = Path(__file__).parent.parent.parent.parent / 'common' / 'continuity-memory' / 'scripts'
+GITHUB_API_DIR = Path(__file__).parent.parent.parent.parent / 'common' / 'github-api' / 'scripts'
 sys.path.insert(0, str(SCRIPTS_DIR))
 sys.path.insert(0, str(GITHUB_API_DIR))
 
