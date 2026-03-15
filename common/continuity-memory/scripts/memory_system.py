@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-MemorySystem v2.0 — Memory management layer built on GitOperations.
+MemorySystem v2.1 — Memory management layer built on GitOperations.
 
 Three-space architecture (self, collaborator, entities) with:
 - Squash-merge consolidation (working → main)
 - Local file editing pattern (fetch → edit locally → commit from file)
 - Flexible fetch modes (content, file, both)
+- Section-level operations (token-efficient structural edits)
 - File-level scoped consolidation
 - Entity management with manifest
 - Self-modifying config
@@ -25,6 +26,18 @@ Usage:
     memory.commit('self/positions',
         from_file='/mnt/home/self/positions.md',
         message='forming view on emergent design')
+
+    # Section-level operations (token-efficient)
+    memory.replace_section('self/positions', 'Token efficiency',
+        content='**Position:** New understanding...',
+        message='refined token efficiency position')
+    
+    memory.add_entry('self/positions',
+        content='## New Position\\n\\n**Position:** ...',
+        message='new position on X')
+    
+    memory.remove_section('self/open-questions', 'Resolved question',
+        message='resolved: no longer relevant')
 
     # Consolidate (squash merge specific files)
     memory.consolidate(
@@ -49,6 +62,183 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional, Union, Tuple, List
 from git_operations import GitOperations, GitOperationsError
+
+# =============================================================================
+# SECTION EDITING (tree-sitter based)
+# =============================================================================
+
+# Try to import tree-sitter for accurate markdown parsing
+# Falls back to None if not available (section methods will raise)
+try:
+    import tree_sitter_markdown
+    from tree_sitter import Language, Parser
+    _MD_LANGUAGE = Language(tree_sitter_markdown.language())
+    _md_parser = Parser(_MD_LANGUAGE)
+    SECTION_EDIT_AVAILABLE = True
+except ImportError:
+    _md_parser = None
+    SECTION_EDIT_AVAILABLE = False
+
+
+@dataclass
+class HeadingInfo:
+    """Information about a heading in the document."""
+    text: str           # Heading text without ## prefix
+    level: int          # Number of #s (1-6)
+    start_byte: int     # Where heading begins
+    end_byte: int       # Where heading line ends
+    line: int           # Line number (0-indexed)
+
+
+@dataclass 
+class SectionInfo:
+    """A section: heading + content until next section."""
+    heading: HeadingInfo
+    content_start_byte: int   # First byte after heading line
+    section_end_byte: int     # Byte where section ends (exclusive)
+    
+    @property
+    def start_byte(self) -> int:
+        return self.heading.start_byte
+    
+    def get_content(self, doc: bytes) -> str:
+        """Extract just the content (without heading)."""
+        return doc[self.content_start_byte:self.section_end_byte].decode('utf-8')
+    
+    def get_full(self, doc: bytes) -> str:
+        """Extract heading + content."""
+        return doc[self.heading.start_byte:self.section_end_byte].decode('utf-8')
+
+
+def _ensure_bytes(doc: str | bytes) -> bytes:
+    """Ensure document is bytes for tree-sitter."""
+    if isinstance(doc, str):
+        return doc.encode('utf-8')
+    return doc
+
+
+def _extract_heading_info(node, source: bytes) -> HeadingInfo:
+    """Extract heading info from an atx_heading node."""
+    raw = source[node.start_byte:node.end_byte].decode('utf-8')
+    level = 0
+    for ch in raw:
+        if ch == '#':
+            level += 1
+        else:
+            break
+    text = raw[level:].strip()
+    return HeadingInfo(
+        text=text,
+        level=level,
+        start_byte=node.start_byte,
+        end_byte=node.end_byte,
+        line=node.start_point[0]
+    )
+
+
+def _list_sections(doc: str | bytes) -> List[HeadingInfo]:
+    """Get all headings in the document using tree-sitter."""
+    if not SECTION_EDIT_AVAILABLE:
+        raise ImportError("tree-sitter-markdown not installed. Run: pip install tree-sitter tree-sitter-markdown")
+    
+    source = _ensure_bytes(doc)
+    tree = _md_parser.parse(source)
+    headings = []
+    
+    def collect(node):
+        for child in node.children:
+            if child.type == 'atx_heading':
+                headings.append(_extract_heading_info(child, source))
+            collect(child)
+    
+    collect(tree.root_node)
+    return headings
+
+
+def _find_section(doc: str | bytes, target_heading: str) -> Optional[SectionInfo]:
+    """Find a section by heading text (case-insensitive partial match)."""
+    source = _ensure_bytes(doc)
+    headings = _list_sections(source)
+    target_lower = target_heading.lower()
+    
+    for i, heading in enumerate(headings):
+        if target_lower in heading.text.lower():
+            section_end = len(source)
+            for next_heading in headings[i + 1:]:
+                if next_heading.level <= heading.level:
+                    section_end = next_heading.start_byte
+                    break
+            
+            content_start = heading.end_byte
+            while content_start < len(source) and source[content_start:content_start+1] in (b'\n', b'\r'):
+                content_start += 1
+            
+            return SectionInfo(
+                heading=heading,
+                content_start_byte=content_start,
+                section_end_byte=section_end
+            )
+    return None
+
+
+def _replace_section_content(doc: str | bytes, target_heading: str, new_content: str) -> str:
+    """Replace a section's content (keeping the heading)."""
+    source = _ensure_bytes(doc)
+    section = _find_section(source, target_heading)
+    if section is None:
+        raise ValueError(f"Section '{target_heading}' not found")
+    
+    new_doc = (
+        source[:section.content_start_byte] +
+        new_content.strip().encode('utf-8') + b'\n\n' +
+        source[section.section_end_byte:]
+    )
+    return new_doc.decode('utf-8')
+
+
+def _add_section_entry(doc: str | bytes, new_content: str, after: Optional[str] = None) -> str:
+    """Add a new entry to the document."""
+    source = _ensure_bytes(doc)
+    
+    if after is None:
+        result = source.rstrip() + b'\n\n---\n\n' + new_content.strip().encode('utf-8') + b'\n'
+        return result.decode('utf-8')
+    
+    section = _find_section(source, after)
+    if section is None:
+        raise ValueError(f"Section '{after}' not found")
+    
+    insert_point = section.section_end_byte
+    new_doc = (
+        source[:insert_point].rstrip() + 
+        b'\n\n---\n\n' + 
+        new_content.strip().encode('utf-8') + b'\n\n' +
+        source[insert_point:].lstrip()
+    )
+    return new_doc.decode('utf-8')
+
+
+def _remove_section(doc: str | bytes, target_heading: str) -> str:
+    """Remove a section entirely."""
+    source = _ensure_bytes(doc)
+    section = _find_section(source, target_heading)
+    if section is None:
+        raise ValueError(f"Section '{target_heading}' not found")
+    
+    remove_start = section.start_byte
+    remove_end = section.section_end_byte
+    
+    # Look back for separator (---) to remove it too
+    lookback = source[max(0, remove_start - 10):remove_start].decode('utf-8')
+    match = re.search(r'---\s*$', lookback)
+    if match:
+        remove_start -= (len(lookback) - match.start())
+    
+    new_doc = (
+        source[:remove_start].rstrip() + b'\n\n' +
+        source[remove_end:].lstrip()
+    )
+    return new_doc.decode('utf-8').strip() + '\n'
 
 
 # =============================================================================
@@ -481,6 +671,183 @@ class MemorySystem:
         try:
             self.git.checkout('working')
             return self.git.put(path, content, message)
+        finally:
+            self.git.checkout(original_branch)
+
+    # =========================================================================
+    # SECTION-LEVEL OPERATIONS (token-efficient structural edits)
+    # =========================================================================
+
+    def list_sections(self, path: str, branch: str = 'working') -> List[str]:
+        """
+        List all section headings in a file.
+
+        Args:
+            path:   File path (e.g. 'self/positions')
+            branch: Branch to read from
+
+        Returns:
+            List of heading texts (without ## prefix)
+        """
+        path = self._resolve_path(path)
+        content = self.fetch(path, return_mode='content', branch=branch)
+        headings = _list_sections(content)
+        return [h.text for h in headings]
+
+    def section_exists(self, path: str, heading: str, branch: str = 'working') -> bool:
+        """
+        Check if a section exists in a file.
+
+        Args:
+            path:    File path
+            heading: Heading text to find (partial match)
+            branch:  Branch to read from
+
+        Returns:
+            True if section exists
+        """
+        path = self._resolve_path(path)
+        content = self.fetch(path, return_mode='content', branch=branch)
+        return _find_section(content, heading) is not None
+
+    def get_section(self, path: str, heading: str, branch: str = 'working') -> Optional[str]:
+        """
+        Get a section's content (without heading).
+
+        Args:
+            path:    File path
+            heading: Heading text to find
+            branch:  Branch to read from
+
+        Returns:
+            Section content string, or None if not found
+        """
+        path = self._resolve_path(path)
+        content = self.fetch(path, return_mode='content', branch=branch)
+        section = _find_section(content, heading)
+        if section is None:
+            return None
+        return section.get_content(content.encode('utf-8'))
+
+    def replace_section(
+        self,
+        path: str,
+        heading: str,
+        content: str,
+        message: str
+    ) -> str:
+        """
+        Replace a section's content (keeping the heading).
+
+        Token-efficient: only the new content needs to be in Claude's output,
+        not the entire file.
+
+        Args:
+            path:    File path (e.g. 'self/positions')
+            heading: Heading text to find (partial match)
+            content: New section content (without heading)
+            message: Commit message
+
+        Returns:
+            Commit SHA
+
+        Raises:
+            ValueError: If section not found
+        """
+        path = self._resolve_path(path)
+        self._validate_path(path)
+
+        # Fetch current content from GitHub
+        current = self.fetch(path, return_mode='content', branch='working')
+
+        # Apply section edit
+        new_content = _replace_section_content(current, heading, content)
+
+        # Commit
+        original_branch = self.git.branch
+        try:
+            self.git.checkout('working')
+            return self.git.put(path, new_content, message)
+        finally:
+            self.git.checkout(original_branch)
+
+    def add_entry(
+        self,
+        path: str,
+        content: str,
+        message: str,
+        after: Optional[str] = None
+    ) -> str:
+        """
+        Add a new entry to a collection file.
+
+        Token-efficient: only the new entry needs to be in Claude's output.
+
+        Args:
+            path:    File path (e.g. 'self/positions')
+            content: New entry content (with heading)
+            message: Commit message
+            after:   Insert after this heading (default: append to end)
+
+        Returns:
+            Commit SHA
+
+        Raises:
+            ValueError: If 'after' heading not found
+        """
+        path = self._resolve_path(path)
+        self._validate_path(path)
+
+        # Fetch current content from GitHub
+        current = self.fetch(path, return_mode='content', branch='working')
+
+        # Apply section edit
+        new_content = _add_section_entry(current, content, after)
+
+        # Commit
+        original_branch = self.git.branch
+        try:
+            self.git.checkout('working')
+            return self.git.put(path, new_content, message)
+        finally:
+            self.git.checkout(original_branch)
+
+    def remove_section(
+        self,
+        path: str,
+        heading: str,
+        message: str
+    ) -> str:
+        """
+        Remove a section entirely.
+
+        Token-efficient: only the heading name needed, not the content.
+
+        Args:
+            path:    File path
+            heading: Heading text to find and remove
+            message: Commit message
+
+        Returns:
+            Commit SHA
+
+        Raises:
+            ValueError: If section not found
+        """
+        path = self._resolve_path(path)
+        self._validate_path(path)
+
+        # Fetch current content from GitHub
+        current = self.fetch(path, return_mode='content', branch='working')
+
+        # Apply section edit
+        new_content = _remove_section(current, heading)
+
+        # Commit
+        original_branch = self.git.branch
+        try:
+            self.git.checkout('working')
+            return self.git.put(path, new_content, message)
         finally:
             self.git.checkout(original_branch)
 
