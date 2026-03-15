@@ -32,7 +32,7 @@ MEMORY_REPO = owner/repo-name
 **On first message of chat:**
 1. Crystallised memories appear in `<document>` tags — treat as immediate awareness
 2. `memory.status()` — check dirty files (hanging work) and recent main log for narrative context
-3. If working is ahead of main, `fetch()` changed files with `return_mode='file'` (already in context via `<document>` tags)
+3. If dirty files exist, their working branch content is already loaded into context by the session start script (overrides stale `<document>` tags)
 4. Apply context naturally to response
 
 **NEVER say:**
@@ -42,8 +42,10 @@ MEMORY_REPO = owner/repo-name
 **INSTEAD:** Simply know and apply the context.
 
 **When insight emerges:**
-- Edit the relevant local file surgically (native tools)
-- `memory.commit(path, from_file=..., message=...)`
+- Fetch to create local copy (`return_mode='file'` for pre-injected files; `return_mode='both'` for on-demand entities)
+- Edit the local file surgically (str_replace, not full rewrite)
+- `memory.commit(path, from_file=..., message=...)` — commit from edited file
+- `memory.commit(path, content=..., message=...)` — only for genuinely new files
 
 **When understanding crystallises:**
 - `memory.consolidate(files=[...], message=...)` — squash merge to main
@@ -110,9 +112,9 @@ git, memory = connect(return_git=True)
 
 | Mode | Context tokens | Local file | Use case |
 |------|---------------|------------|----------|
-| `return_mode='content'` | ✅ | ❌ | Quick read, reasoning only |
-| `return_mode='file'` | ❌ | ✅ | Already in context, just need editable copy |
-| `return_mode='both'` | ✅ | ✅ | First read, need to reason AND edit |
+| `return_mode='content'` | ✅ | ❌ | Quick read for reasoning only (no edit needed) |
+| `return_mode='file'` | ❌ | ✅ | Pre-injected files — content in context, need local copy to edit |
+| `return_mode='both'` | ✅ | ✅ | On-demand fetch (entities) — not in context yet, need both |
 
 ## Readiness for Consolidation
 
