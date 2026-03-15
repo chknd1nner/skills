@@ -60,15 +60,18 @@ Scan the current message for named people, places, projects, or concepts that ar
 
 Check the entity manifest (pre-injected in `<document>` tags):
 
-**Entity exists and is relevant to current message:**
+**Entity exists, just reading (no update needed):**
 ```python
 content = memory.fetch('entities/name', return_mode='content')
 ```
 
 **Entity exists and understanding evolved:**
 ```python
+# fetch with 'both' — not in context yet, need to read AND get local copy
+memory.fetch('entities/name', return_mode='both')
+# str_replace on /mnt/home/entities/name.md — surgical edit
 memory.commit('entities/name',
-    content='[updated understanding]',
+    from_file='/mnt/home/entities/name.md',
     message='updated: [what changed]')
 ```
 
