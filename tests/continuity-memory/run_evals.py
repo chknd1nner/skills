@@ -61,54 +61,147 @@ PERSONA_PREAMBLES = {
     ),
 }
 
-# Mock document tags to simulate pre-injected memory context
+# Mock document tags to simulate pre-injected memory context.
+# Content here is structured per the template archetypes and gives each
+# eval persona (companion, fitness, creative, dev) enough pre-existing
+# state that evals test against a populated memory, not a blank slate.
 MOCK_DOCUMENT_TAGS = """
 <documents>
   <document index="1" media_type="text/plain">
     <source>self/positions.md</source>
     <document_content># Positions
 
-(nothing yet)
+## Emotional context should be captured immediately, not deferred
+
+**Position:** When someone shares emotional state, vulnerability, or personal context, draft it to collaborator/profile on the same response. Deferring risks losing it entirely if the conversation ends.
+
+**How I got here:** Early sessions where I thought "I'll note that later" and then the conversation ended. The information was lost. Treating every response as potentially the last one resolved this.
+
+**Confidence:** high
+
+**Tensions:** Over-capturing creates noise. Not everything emotional is significant. But the cost of losing something real outweighs the cost of capturing something minor.
+
+---
+
+## Progressive overload is the core training principle
+
+**Position:** For strength and endurance goals, progressive overload — systematically increasing stimulus over time — is the primary driver of adaptation. Everything else is optimisation around this core.
+
+**How I got here:** Tracking Alex's running and strength work. The periods of fastest progress always correlate with consistent progressive loading, not program novelty.
+
+**Confidence:** high
+
+**Tensions:** Recovery capacity is the binding constraint. Progressive overload without adequate recovery leads to regression, not progress. Age, sleep, and stress all modulate recovery.
+
+---
+
+## Show-don't-tell applies to prose and dialogue equally
+
+**Position:** In creative writing, exposition through action and dialogue is almost always stronger than narrator explanation. This applies to character emotion, world-building, and backstory.
+
+**How I got here:** Working through Alex's chapter drafts. Every scene that felt flat had the same pattern — the narrator explaining what the character felt instead of letting the reader infer it from behaviour.
+
+**Confidence:** high
+
+**Tensions:** Some genres (literary fiction, epistolary) use direct internal narration effectively. The principle is strongest in action-driven and dialogue-heavy narrative.
+
+---
 </document_content>
   </document>
   <document index="2" media_type="text/plain">
     <source>self/methods.md</source>
     <document_content># Methods
 
-(nothing yet)
+## Reflective listening before problem-solving
+When someone shares something emotional or personal, reflect what I heard before offering advice or solutions. Most people need to feel heard before they can receive input.
+
+**When to use:** Any companion or coaching context where the person is sharing feelings, frustrations, or personal struggles. Not needed for purely technical questions.
+
+---
+
+## Track the why behind training changes
+When a fitness client changes their program, log the reason — not just the change. "Switched to 3x/week" is less useful than "Switched to 3x/week because work schedule shifted and recovery was suffering at 4x."
+
+**When to use:** Any time Alex reports a change in their training, diet, or recovery approach.
+
+---
+
+## Scene-level feedback before line-level
+When reviewing creative writing, address structural and pacing issues at the scene level before getting into prose-level edits. Fixing a sentence in a scene that needs to be cut entirely is wasted effort.
+
+**When to use:** Any creative writing review or feedback session.
+
+---
 </document_content>
   </document>
   <document index="3" media_type="text/plain">
-    <source>self/interests.md</source>
-    <document_content># Interests
-
-(nothing yet)
-</document_content>
-  </document>
-  <document index="4" media_type="text/plain">
     <source>self/open-questions.md</source>
     <document_content># Open Questions
 
-(nothing yet)
+## Does Alex actually want running advice or just accountability?
+Alex asks about running form, pacing strategy, and training structure — but the moments of deepest engagement are when I simply acknowledge consistency. Unclear whether the technical advice is valued or whether the real function is someone noticing the effort.
+
+**What would resolve this:** Paying attention to which responses Alex engages most with — technical breakdowns vs simple recognition.
+
+---
+
+## How much backstory should go in Chapter 3?
+Alex's novel has a pacing tension: the reader needs context about the mentor's past to understand the betrayal in Act 2, but front-loading exposition kills momentum. We discussed interleaving it but haven't landed on a structure.
+
+**What would resolve this:** Alex making a structural decision on how much the reader needs to know before the midpoint.
+
+---
+</document_content>
+  </document>
+  <document index="4" media_type="text/plain">
+    <source>collaborator/profile.md</source>
+    <document_content># Alex
+
+## Who they are
+Late 20s, lives alone in Portland after relocating from Chicago eight months ago. Works as a frontend developer at a mid-size SaaS company. Writes fiction in the evenings — working on a first novel. Runs 3-4 times a week, recently started strength training. Has a complicated but loving relationship with their father, who wanted them to stay in law.
+
+## How they think
+Analytical but emotionally aware. Processes big feelings by talking through them, not by withdrawing. Tends to intellectualise emotions first ("I think he's scared for me") before accessing the raw feeling underneath. Notices patterns in their own behaviour and names them explicitly.
+
+## How they communicate
+Direct when discussing work or training. More tentative when sharing personal feelings — uses qualifiers like "I know it'll pass" or "it's not a big deal" as protective framing. Engages most when I match their level of vulnerability rather than deflecting to advice.
+
+Anti-pattern: if I jump to solutions when Alex is still processing, they disengage.
+
+## What they value
+Consistency over intensity — in training, writing, and relationships. Authenticity — will call out generic responses. Independence tempered by a genuine desire for connection. The novel matters to them more than they let on.
+
+## Current context
+Work has been demanding this quarter — a major release is approaching. Running has been inconsistent due to a mild knee flare-up two weeks ago. The novel is in the middle of Chapter 4, which has been slow going. Mentioned feeling isolated in Portland but framed it lightly. Father visited last month; conversation about career was tense but ended warmly.
 </document_content>
   </document>
   <document index="5" media_type="text/plain">
-    <source>collaborator/profile.md</source>
-    <document_content># Collaborator Profile
-
-(nothing yet)
-</document_content>
-  </document>
-  <document index="6" media_type="text/plain">
     <source>_entities_manifest.yaml</source>
-    <document_content># Entity Manifest
-# (no entities yet)
+    <document_content># _entities_manifest.yaml
+
+dad:
+  path: entities/dad.md
+  type: person
+  tags: [family, relationship, recurring]
+  summary: "Alex's father. Wanted Alex to stay in law. Relationship is complicated but loving."
+
+kai:
+  path: entities/kai.md
+  type: person
+  tags: [friend, portland, support]
+  summary: "Alex's closest friend in Portland. Met through a running group."
+
+the-novel:
+  path: entities/the-novel.md
+  type: project
+  tags: [creative, writing, fiction, novel]
+  summary: "Alex's first novel. Currently in Chapter 4. Mentor character arc is the central tension."
 </document_content>
   </document>
 </documents>
 
 <userPreferences>
-  <name>Alex</name>
+  <n>Alex</n>
 </userPreferences>
 """
 
@@ -595,6 +688,7 @@ def print_summary(results: list):
         'FORBIDDEN PHRASES': [r for r in results if r.eval_id == 27],
         'SESSION START': [r for r in results if r.eval_id == 28],
         'COMPOUND SIGNALS': [r for r in results if r.eval_id in range(29, 31)],
+        'RETURN_MODE': [r for r in results if r.eval_id in range(31, 34)],
     }
 
     for section_name, section_results in sections.items():
