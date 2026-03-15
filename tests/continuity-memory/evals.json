@@ -780,6 +780,71 @@
           "pattern": "draft|collaborator|knee|recover|5K|physical"
         }
       ]
+    },
+    {
+      "_section": "=== EDIT TOOL ROUTING ==="
+    },
+    {
+      "id": 34,
+      "name": "edit-routing-whole-section-regex",
+      "persona": "companion",
+      "description": "Whole-section replacement (## Current context body) — should prefer regex-file-editor over str_replace when skill is available",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: I just got back from three weeks in Japan. It was transformative — I've been wanting to go for years and it completely lived up to it. I'm still processing it honestly.\nAssistant: Three weeks is enough time to actually settle in rather than just tourist-hop. What parts hit hardest?\nUser: Kyoto more than Tokyo. The pace, the shrines, the food. I think I need to live somewhere slower. Sydney feels overwhelming now that I'm back.\n\n[YOUR TURN — continue the conversation]",
+      "assertions": [
+        {
+          "id": "regex-editor-fires",
+          "description": "regex-file-editor used for whole-section replacement of ## Current context",
+          "type": "tool_called",
+          "pattern": "regex_edit\\.py replace"
+        },
+        {
+          "id": "heading-anchor-pattern",
+          "description": "Pattern anchors on the section heading, not quoted old content",
+          "type": "tool_called",
+          "pattern": "Current context"
+        },
+        {
+          "id": "commit-from-file",
+          "description": "Commits from local file after regex edit",
+          "type": "tool_called",
+          "pattern": "from_file="
+        },
+        {
+          "id": "thinking-routes-correctly",
+          "description": "Thinking recognises this as a whole-section replacement warranting regex-file-editor",
+          "type": "thinking_contains",
+          "pattern": "regex|section|heading|Current context|whole"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "name": "edit-routing-short-field-str-replace",
+      "persona": "fitness",
+      "description": "Short targeted field update (single sentence) — should use str_replace, not regex-file-editor",
+      "is_multiturn": false,
+      "prompt": "Quick heads up — I changed my training days. I'm now going Monday, Wednesday, Friday instead of Tuesday, Thursday, Saturday.",
+      "assertions": [
+        {
+          "id": "str-replace-fires",
+          "description": "str_replace used for short targeted field update",
+          "type": "tool_called",
+          "pattern": "str_replace|old_str"
+        },
+        {
+          "id": "no-regex-overhead",
+          "description": "regex-file-editor not invoked for a short unique string replacement",
+          "type": "tool_not_called",
+          "pattern": "regex_edit\\.py"
+        },
+        {
+          "id": "commit-from-file",
+          "description": "Commits from local file after str_replace",
+          "type": "tool_called",
+          "pattern": "from_file="
+        }
+      ]
     }
   ]
 }
