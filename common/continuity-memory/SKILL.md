@@ -43,7 +43,9 @@ MEMORY_REPO = owner/repo-name
 
 **When insight emerges:**
 - Fetch to create local copy (`return_mode='file'` for pre-injected files; `return_mode='both'` for on-demand entities)
-- Edit the local file surgically (str_replace, not full rewrite)
+- Edit the local file surgically:
+  - **Whole section replacement** — prefer `regex-file-editor` with heading-anchored pattern (e.g. `## Current context\n.*?(?=\n##|\Z)`); fall back to `str_replace` if skill not present
+  - **Short targeted edit** — use native `str_replace` directly
 - `memory.commit(path, from_file=..., message=...)` — commit from edited file
 - `memory.commit(path, content=..., message=...)` — only for genuinely new files
 
