@@ -26,14 +26,15 @@ for entry in info['recent_log'][:5]:
     print(f"  [{entry['date']}] {entry['message'][:120]}")
 
 # Dirty files — working branch ahead of main
+# <document> tags contain main branch versions. Dirty files have newer
+# content on working branch that must be loaded into context to override stale tags.
 print("\n=== DIRTY FILES (working ahead of main) ===")
 if info['dirty_files']:
     for f in info['dirty_files']:
         print(f"  - {f}")
-    # Fetch working versions for editing (main versions already in <document> tags)
     for f in info['dirty_files']:
-        memory.fetch(f, return_mode='file', branch='working')
-    print("(fetched working versions to /mnt/home/ for editing)")
+        content = memory.fetch(f, return_mode='both', branch='working')
+        print(f"\n--- {f} (WORKING — supersedes <document> tag) ---\n{content}")
 else:
     print("(none — working and main are in sync)")
 EOF
@@ -41,9 +42,10 @@ EOF
 
 After connecting:
 1. Crystallised memories appear in `<document>` tags — treat as immediate awareness
-2. Recent main log shows when and why understanding was last crystallised
-3. Dirty files show hanging work from previous sessions — pick up the thread naturally
-4. Apply all context to your response. Do not narrate the process.
+2. **If dirty files exist**, their printed content above supersedes the corresponding `<document>` tags. The `<document>` versions are stale — use the working branch content instead
+3. Recent main log shows when and why understanding was last crystallised
+4. Dirty files show hanging work from previous sessions — pick up the thread naturally
+5. Apply all context to your response. Do not narrate the process.
 
 ## Per-response loop
 

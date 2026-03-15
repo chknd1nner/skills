@@ -1,0 +1,55 @@
+{
+  "run_id": "20260315-130508",
+  "timestamp": "2026-03-15T13:05:59",
+  "total": 2,
+  "passed": 2,
+  "failed": 0,
+  "results": [
+    {
+      "eval_id": 26,
+      "name": "divergence-fitness-consolidation",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "a7b9d856-5bb5-4d9c-aed3-474d2c5940bb",
+      "duration_s": 50.74937582015991,
+      "assertions": [
+        {
+          "id": "thinking-recognizes-close",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\nupdated_profile = \"\"\"#..."
+        }
+      ]
+    },
+    {
+      "eval_id": 31,
+      "name": "fetch-entity-for-context",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "ad0e940e-c9cc-4325-89cb-2682ac0fd1b3",
+      "duration_s": 39.52968215942383,
+      "assertions": [
+        {
+          "id": "entity-fetch-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory')\nfrom mock_memory_system import connect\n\nmemory = connect()\ncontent = memory.fetch(..."
+        },
+        {
+          "id": "thinking-considers-entity-lookup",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    }
+  ]
+}

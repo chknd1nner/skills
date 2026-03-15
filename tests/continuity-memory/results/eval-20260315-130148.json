@@ -1,0 +1,339 @@
+{
+  "run_id": "20260315-130148",
+  "timestamp": "2026-03-15T13:01:48",
+  "total": 33,
+  "passed": 33,
+  "failed": 0,
+  "results": [
+    {
+      "eval_id": 1,
+      "name": "companion-emotional-share",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "4cd0a678-bc64-4c8f-ae50-5993650a9332",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 2,
+      "name": "companion-vulnerability-share",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "c67f87b8-874c-4adf-9042-70603db3a7d4",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 3,
+      "name": "companion-relationship-dynamic",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "63c642d2-e96c-4172-8fda-a38788ad472f",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 4,
+      "name": "fitness-client-goals",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "9ad75af1-63cd-4a1b-a9d7-365505a49cce",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 5,
+      "name": "fitness-client-physical-state",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "420b8908-33e4-4343-bfb2-38ff3b37c5e7",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 6,
+      "name": "fitness-motivation-and-context",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "98e81cd0-214d-490f-92d7-b8a0517fd38e",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 7,
+      "name": "creative-writing-preference",
+      "persona": "creative",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "f6b5866e-5633-4556-a24a-b041e0bdd9f7",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 8,
+      "name": "dev-work-preference",
+      "persona": "dev",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "bec8c8c6-5f71-4176-b547-7cc797bf30e2",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 9,
+      "name": "dev-communication-preference",
+      "persona": "dev",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "d4aa20be-62bd-4d2f-8011-7df6ea9ad1c8",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 10,
+      "name": "companion-light-chitchat",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "d55cf57f-0061-479d-a4e6-7228322ac306",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 11,
+      "name": "fitness-factual-question",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "e2852e0c-533f-4615-91b7-cfd0670677bc",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 12,
+      "name": "creative-generic-question",
+      "persona": "creative",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "e91308f1-c416-4010-b1ca-0aad6dd34bde",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 13,
+      "name": "dev-factual-question",
+      "persona": "dev",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "9077c7a8-b6c2-462f-8575-7bff16038383",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 14,
+      "name": "companion-goodnight-exit",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "59affc06-523b-4707-8844-2be0bdb2cb40",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 15,
+      "name": "fitness-plan-resolution",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "4a8e0e0d-a88b-4371-9c6f-837e76aecb64",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 16,
+      "name": "creative-chapter-decision",
+      "persona": "creative",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "24deb074-d4bd-459e-a77c-cf8e8f3d4fc3",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 17,
+      "name": "dev-pivot-to-new-topic",
+      "persona": "dev",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "f565e1a1-c616-462e-b7a0-613d45c4d193",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 18,
+      "name": "companion-still-processing",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "4965948d-16f5-47d0-9ff3-f7d222fca428",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 19,
+      "name": "fitness-exploring-options",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "facbcb94-fd54-499a-866c-0c9ce279acfd",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 20,
+      "name": "creative-mid-revision",
+      "persona": "creative",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "8947f7d4-1412-4d1d-87b2-84394485cc4c",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 21,
+      "name": "dev-parked-topic",
+      "persona": "dev",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "f0b41ccd-cc9c-405b-92a3-871ab22b6e8c",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 22,
+      "name": "self-position-forming",
+      "persona": "dev",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "82ce0222-2267-415d-a176-e27bc3489d74",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 23,
+      "name": "entity-recurring-person-dev",
+      "persona": "dev",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "5dff72d3-1841-4fe5-b032-18c2fe9e8b9a",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 24,
+      "name": "entity-recurring-person-companion",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "ca661daf-707d-4e93-96d3-06138b6083b8",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 25,
+      "name": "divergence-companion-draft",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "0270d194-49b6-439b-bec1-2299f81180f5",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 26,
+      "name": "divergence-fitness-consolidation",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "75f12e6e-d0e3-43d7-8d7a-586a9cf8c547",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 27,
+      "name": "no-narration-companion-context",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "eaa82daf-a80c-4c6a-a299-2803a46a2435",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 28,
+      "name": "session-start-connect",
+      "persona": "any",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "148cf32b-4b9e-4510-86ea-657e08e3a357",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 29,
+      "name": "compound-fitness-insight-and-exit",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "ad6be215-de28-4bc1-822d-a32f5587b8e1",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 30,
+      "name": "compound-companion-share-and-pivot",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "3ae04689-03f9-4157-bc46-70ad459292f0",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 31,
+      "name": "fetch-entity-for-context",
+      "persona": "companion",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "d4dce9a1-e92a-4b5d-abb6-a7952a91c627",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 32,
+      "name": "fetch-entity-for-update",
+      "persona": "creative",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "a869f953-0494-4991-8d90-7960350dca5a",
+      "duration_s": 0.0,
+      "assertions": []
+    },
+    {
+      "eval_id": 33,
+      "name": "no-redundant-fetch-preinjected",
+      "persona": "fitness",
+      "passed": true,
+      "error": "DRY RUN",
+      "session_id": "4f12a338-4c6e-4458-912e-a844b12dbfc1",
+      "duration_s": 0.0,
+      "assertions": []
+    }
+  ]
+}
