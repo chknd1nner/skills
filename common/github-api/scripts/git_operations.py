@@ -274,22 +274,42 @@ class GitOperations:
             for i, c in enumerate(commits) if i < limit
         ]
     
-    def diff(self, base: str, head: str) -> list[dict]:
-        """Compare two refs. Returns list of changed files."""
+    def changed_files(self, base: str, head: str) -> list[dict]:
+        """
+        Compare two branch tips by blob SHA and return files that differ.
+
+        Uses tree comparison rather than repo.compare() to avoid the merge-base
+        problem: compare() diffs from the common ancestor, so after a squash
+        merge files appear dirty even when content is identical. Blob SHA
+        comparison checks what the files actually contain right now.
+
+        Returns list of dicts with 'filename' and 'status' (added/removed/modified).
+        """
         try:
-            comparison = self._repo.compare(base, head)
-            return [
-                {
-                    'filename': f.filename,
-                    'status': f.status,
-                    'additions': f.additions,
-                    'deletions': f.deletions,
-                    'patch': getattr(f, 'patch', None)
-                }
-                for f in comparison.files
-            ]
+            def get_blobs(branch: str) -> dict:
+                commit = self._repo.get_branch(branch).commit
+                tree = self._repo.get_git_tree(commit.commit.tree.sha, recursive=True)
+                return {item.path: item.sha for item in tree.tree if item.type == 'blob'}
+
+            base_blobs = get_blobs(base)
+            head_blobs = get_blobs(head)
+
+            all_paths = set(base_blobs.keys()) | set(head_blobs.keys())
+            result = []
+            for path in sorted(all_paths):
+                base_sha = base_blobs.get(path)
+                head_sha = head_blobs.get(path)
+                if base_sha != head_sha:
+                    if base_sha is None:
+                        status = 'added'
+                    elif head_sha is None:
+                        status = 'removed'
+                    else:
+                        status = 'modified'
+                    result.append({'filename': path, 'status': status})
+            return result
         except GithubException as e:
-            raise GitOperationsError(f"Failed to diff '{base}..{head}': {e}")
+            raise GitOperationsError(f"Failed to compare '{base}..{head}': {e}")
     
     def get_ref_sha(self, ref: str) -> str:
         """Get SHA that ref points to."""
@@ -571,7 +591,7 @@ def run_tests(git: "GitOperations") -> dict:
         
         # === TEST: diff ===
         print("🔍 Testing diff...")
-        diff = git.diff('main', '_test-source')
+        diff = git.changed_files('main', '_test-source')
         filenames = [f['filename'] for f in diff]
         record('diff',
                '_test/hello.md' in filenames,

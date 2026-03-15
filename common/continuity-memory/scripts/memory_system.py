@@ -345,7 +345,7 @@ class MemorySystem:
         """
         # Dirty files (working ahead of main)
         try:
-            diff = self.git.diff('main', 'working')
+            diff = self.git.changed_files('main', 'working')
             dirty = [f['filename'] for f in diff]
         except GitOperationsError:
             dirty = []
