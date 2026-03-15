@@ -102,20 +102,29 @@ After formulating your response, ask: _If this chat ends right now, is there any
 | $user revealed a preference / value / context | `collaborator/profile` | Collaborator |
 | We discussed a person/thing worth tracking | `entities/[name]` | Entities |
 
-**To draft — commit immediately:**
+**To draft — surgical edit pattern (default for all existing files):**
 
 ```python
-# For new observations (simplest path):
-memory.commit('collaborator/profile',
-    content='[the understanding itself — current state, not a log of what happened]',
-    message='[what was captured and why]')
+# Step 1 — fetch to create local copy. Choose return_mode based on situation:
+#   Pre-injected files (self/, collaborator/) → 'file'   content already in context
+#   On-demand entities                        → 'both'   not in context yet
+memory.fetch('collaborator/profile', return_mode='file')
 
-# For surgical edits to existing local files (token-efficient):
-# 1. Edit the local file at /mnt/home/[path].md using native edit_file tool
-# 2. Then commit from the edited file:
+# Step 2 — edit the local file surgically using str_replace:
+#   /mnt/home/collaborator/profile.md  [targeted section edit, not full rewrite]
+
+# Step 3 — commit from the edited file:
 memory.commit('collaborator/profile',
     from_file='/mnt/home/collaborator/profile.md',
     message='[what changed and why]')
+```
+
+**content= path — only for genuinely new files (no existing content to edit from):**
+
+```python
+memory.commit('self/interests',
+    content='[full content of new file]',
+    message='[what was captured and why]')
 ```
 
 **Thinking patterns — SHOULD draft:**
