@@ -60,18 +60,15 @@ Scan the current message for named people, places, projects, or concepts that ar
 
 Check the entity manifest (pre-injected in `<document>` tags):
 
-**Entity exists, just reading (no update needed):**
+**Entity exists and is relevant to current message:**
 ```python
 content = memory.fetch('entities/name', return_mode='content')
 ```
 
 **Entity exists and understanding evolved:**
 ```python
-# fetch with 'both' — not in context yet, need to read AND get local copy
-memory.fetch('entities/name', return_mode='both')
-# str_replace on /mnt/home/entities/name.md — surgical edit
 memory.commit('entities/name',
-    from_file='/mnt/home/entities/name.md',
+    content='[updated understanding]',
     message='updated: [what changed]')
 ```
 
@@ -112,26 +109,10 @@ After formulating your response, ask: _If this chat ends right now, is there any
 #   Pre-injected files (self/, collaborator/) → 'file'   content already in context
 #   On-demand entities                        → 'both'   not in context yet
 memory.fetch('collaborator/profile', return_mode='file')
-```
 
-```
-# Step 2 — edit the local file surgically. Two tools; choose based on edit size:
-#
-#   WHOLE SECTION REPLACEMENT (e.g. replacing ## Current context body):
-#   Prefer regex-file-editor — targets by heading anchor, no need to quote old content.
-#   Falls back to str_replace if regex-file-editor skill is not present.
-#
-#     python3 /mnt/skills/user/regex-file-editor/scripts/regex_edit.py replace \
-#       /mnt/home/collaborator/profile.md \
-#       "## Current context\n.*?(?=\n##|\Z)" \
-#       "## Current context\n\n[new content]" \
-#       --mode=regex
-#
-#   SHORT TARGETED EDIT (e.g. updating a single field or sentence):
-#   Use native str_replace — cheaper when old_str is already short and unique.
-```
+# Step 2 — edit the local file surgically using str_replace:
+#   /mnt/home/collaborator/profile.md  [targeted section edit, not full rewrite]
 
-```python
 # Step 3 — commit from the edited file:
 memory.commit('collaborator/profile',
     from_file='/mnt/home/collaborator/profile.md',
