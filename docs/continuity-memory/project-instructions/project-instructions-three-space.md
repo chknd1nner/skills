@@ -112,10 +112,26 @@ After formulating your response, ask: _If this chat ends right now, is there any
 #   Pre-injected files (self/, collaborator/) → 'file'   content already in context
 #   On-demand entities                        → 'both'   not in context yet
 memory.fetch('collaborator/profile', return_mode='file')
+```
 
-# Step 2 — edit the local file surgically using str_replace:
-#   /mnt/home/collaborator/profile.md  [targeted section edit, not full rewrite]
+```
+# Step 2 — edit the local file surgically. Two tools; choose based on edit size:
+#
+#   WHOLE SECTION REPLACEMENT (e.g. replacing ## Current context body):
+#   Prefer regex-file-editor — targets by heading anchor, no need to quote old content.
+#   Falls back to str_replace if regex-file-editor skill is not present.
+#
+#     python3 /mnt/skills/user/regex-file-editor/scripts/regex_edit.py replace \
+#       /mnt/home/collaborator/profile.md \
+#       "## Current context\n.*?(?=\n##|\Z)" \
+#       "## Current context\n\n[new content]" \
+#       --mode=regex
+#
+#   SHORT TARGETED EDIT (e.g. updating a single field or sentence):
+#   Use native str_replace — cheaper when old_str is already short and unique.
+```
 
+```python
 # Step 3 — commit from the edited file:
 memory.commit('collaborator/profile',
     from_file='/mnt/home/collaborator/profile.md',
