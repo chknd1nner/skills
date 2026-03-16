@@ -155,30 +155,63 @@ def _list_sections(doc: str | bytes) -> List[HeadingInfo]:
     return headings
 
 
-def _find_section(doc: str | bytes, target_heading: str) -> Optional[SectionInfo]:
-    """Find a section by heading text (case-insensitive partial match)."""
+def _find_section(doc: str | bytes, target_heading: str, level: Optional[int] = None) -> Optional[SectionInfo]:
+    """Find a section by heading text (case-insensitive partial match).
+
+    Args:
+        doc: Document content (str or bytes)
+        target_heading: Heading text to search for (partial match)
+        level: Optional heading level (1-6) to disambiguate
+
+    Returns:
+        SectionInfo if exactly one match found, None if no match.
+
+    Raises:
+        ValueError: If multiple headings match (ambiguous).
+    """
     source = _ensure_bytes(doc)
     headings = _list_sections(source)
     target_lower = target_heading.lower()
-    
+
+    # Find all matching headings
+    matches = []
     for i, heading in enumerate(headings):
         if target_lower in heading.text.lower():
-            section_end = len(source)
-            for next_heading in headings[i + 1:]:
-                if next_heading.level <= heading.level:
-                    section_end = next_heading.start_byte
-                    break
-            
-            content_start = heading.end_byte
-            while content_start < len(source) and source[content_start:content_start+1] in (b'\n', b'\r'):
-                content_start += 1
-            
-            return SectionInfo(
-                heading=heading,
-                content_start_byte=content_start,
-                section_end_byte=section_end
-            )
-    return None
+            if level is not None and heading.level != level:
+                continue
+            matches.append((i, heading))
+
+    if not matches:
+        return None
+
+    if len(matches) > 1:
+        locations = ', '.join(
+            f"'{m[1].text}' (level {m[1].level}, line {m[1].line + 1})"
+            for m in matches
+        )
+        raise ValueError(
+            f"Ambiguous heading '{target_heading}': matches {len(matches)} sections: "
+            f"{locations}. Use a more specific heading text or specify level= to disambiguate."
+        )
+
+    i, heading = matches[0]
+
+    # Find section end (next heading at same or higher level)
+    section_end = len(source)
+    for next_heading in headings[i + 1:]:
+        if next_heading.level <= heading.level:
+            section_end = next_heading.start_byte
+            break
+
+    content_start = heading.end_byte
+    while content_start < len(source) and source[content_start:content_start+1] in (b'\n', b'\r'):
+        content_start += 1
+
+    return SectionInfo(
+        heading=heading,
+        content_start_byte=content_start,
+        section_end_byte=section_end
+    )
 
 
 def _replace_section_content(doc: str | bytes, target_heading: str, new_content: str) -> str:

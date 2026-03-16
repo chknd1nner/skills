@@ -429,5 +429,120 @@ Content.
         assert content.strip() == ''
 
 
+# =============================================================================
+# Level parameter and ambiguity detection tests
+# =============================================================================
+
+class TestLevelParameter:
+    """Tests for heading level disambiguation in _find_section."""
+
+    def test_ambiguous_different_levels_raises_without_level(self):
+        doc = load_sample('self/multi-level-headings.md')
+        with pytest.raises(ValueError, match="Ambiguous"):
+            _find_section(doc, 'Overview')
+
+    def test_find_with_level_2(self):
+        doc = load_sample('self/multi-level-headings.md')
+        section = _find_section(doc, 'Overview', level=2)
+        assert section is not None
+        assert section.heading.level == 2
+        content = section.get_content(doc.encode('utf-8'))
+        assert 'Top-level overview' in content
+
+    def test_find_with_level_3(self):
+        doc = load_sample('self/multi-level-headings.md')
+        section = _find_section(doc, 'Overview', level=3)
+        assert section is not None
+        assert section.heading.level == 3
+        content = section.get_content(doc.encode('utf-8'))
+        assert 'Nested overview' in content
+
+    def test_find_with_wrong_level_returns_none(self):
+        doc = load_sample('self/multi-level-headings.md')
+        section = _find_section(doc, 'Overview', level=4)
+        assert section is None
+
+    def test_ambiguous_same_level_raises_error(self):
+        doc = load_sample('self/duplicate-headings.md')
+        with pytest.raises(ValueError, match="Ambiguous"):
+            _find_section(doc, 'Summary')
+
+    def test_ambiguous_error_message_includes_locations(self):
+        doc = load_sample('self/duplicate-headings.md')
+        with pytest.raises(ValueError) as exc_info:
+            _find_section(doc, 'Summary')
+        msg = str(exc_info.value)
+        assert 'level 2' in msg
+        assert 'line' in msg
+
+    def test_same_level_ambiguity_not_resolved_by_level(self):
+        """Even with level specified, two matches at that level is still ambiguous."""
+        doc = load_sample('self/duplicate-headings.md')
+        with pytest.raises(ValueError, match="Ambiguous"):
+            _find_section(doc, 'Summary', level=2)
+
+    def test_ambiguous_resolved_by_level(self):
+        doc = load_sample('self/multi-level-headings.md')
+        section = _find_section(doc, 'Methods', level=2)
+        assert section is not None
+        assert section.heading.level == 2
+
+    def test_unique_heading_no_level_needed(self):
+        doc = load_sample('self/multi-level-headings.md')
+        section = _find_section(doc, 'Unique Section')
+        assert section is not None
+        assert section.heading.text == 'Unique Section'
+
+
+class TestLevelPropagation:
+    """Tests that level parameter propagates through replace/add/remove."""
+
+    def test_replace_section_with_level(self):
+        doc = load_sample('self/multi-level-headings.md')
+        result = _replace_section_content(doc, 'Overview', 'Replaced top-level.', level=2)
+        assert 'Replaced top-level.' in result
+        assert 'Nested overview' in result  # H3 section untouched
+
+    def test_replace_section_with_level_3(self):
+        doc = load_sample('self/multi-level-headings.md')
+        result = _replace_section_content(doc, 'Overview', 'Replaced nested.', level=3)
+        assert 'Replaced nested.' in result
+        assert 'Top-level overview' in result  # H2 section untouched
+
+    def test_replace_section_ambiguous_without_level(self):
+        doc = load_sample('self/multi-level-headings.md')
+        with pytest.raises(ValueError, match="Ambiguous"):
+            _replace_section_content(doc, 'Overview', 'New content.')
+
+    def test_remove_section_with_level(self):
+        doc = load_sample('self/multi-level-headings.md')
+        result = _remove_section(doc, 'Overview', level=3)
+        assert '### Overview' not in result
+        assert '## Overview' in result  # H2 preserved
+
+    def test_remove_section_ambiguous_without_level(self):
+        doc = load_sample('self/multi-level-headings.md')
+        with pytest.raises(ValueError, match="Ambiguous"):
+            _remove_section(doc, 'Overview')
+
+    def test_add_entry_after_with_level(self):
+        doc = load_sample('self/multi-level-headings.md')
+        result = _add_section_entry(
+            doc,
+            '## New Section\n\nNew content.',
+            after='Overview',
+            after_level=2
+        )
+        lines = result.split('\n')
+        new_idx = next(i for i, l in enumerate(lines) if 'New Section' in l)
+        h2_idx = next(i for i, l in enumerate(lines) if l.strip() == '## Overview')
+        assert new_idx > h2_idx
+
+    def test_add_entry_after_ambiguous_without_level(self):
+        doc = load_sample('self/multi-level-headings.md')
+        with pytest.raises(ValueError, match="Ambiguous"):
+            _add_section_entry(doc, '## New\n\nContent.', after='Overview')
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
