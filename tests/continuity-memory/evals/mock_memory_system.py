@@ -98,6 +98,32 @@ class MockMemorySystem:
         print(f"memory.remove_category('{space}', '{name}')")
         return 'mock_remove_sha'
 
+    # Section editing tools (local file operations)
+
+    def list_sections(self, path):
+        print(f"memory.list_sections('{path}')")
+        return [{'text': 'Example Section', 'level': 2}]
+
+    def section_exists(self, path, heading, level=None):
+        print(f"memory.section_exists('{path}', '{heading}', level={level})")
+        return True
+
+    def get_section(self, path, heading, level=None):
+        print(f"memory.get_section('{path}', '{heading}', level={level})")
+        return f"(placeholder content for section '{heading}')"
+
+    def replace_section(self, path, heading, content, level=None):
+        print(f"memory.replace_section('{path}', '{heading}', content=({len(content)} chars), level={level})")
+        return f'/tmp/mock_memory/{path}.md'
+
+    def add_entry(self, path, content, after=None, after_level=None):
+        print(f"memory.add_entry('{path}', content=({len(content)} chars), after={after}, after_level={after_level})")
+        return f'/tmp/mock_memory/{path}.md'
+
+    def remove_section(self, path, heading, level=None):
+        print(f"memory.remove_section('{path}', '{heading}', level={level})")
+        return f'/tmp/mock_memory/{path}.md'
+
 
 def connect(env_path=None, return_git=False, **kwargs):
     """Drop-in replacement for memory_system.connect()."""
