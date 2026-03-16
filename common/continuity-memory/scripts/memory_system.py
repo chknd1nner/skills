@@ -708,56 +708,79 @@ class MemorySystem:
             self.git.checkout(original_branch)
 
     # =========================================================================
-    # SECTION-LEVEL OPERATIONS (token-efficient structural edits)
+    # SECTION-LEVEL OPERATIONS (local file tools)
     # =========================================================================
 
-    def list_sections(self, path: str, branch: str = 'working') -> List[str]:
+    def _local_path(self, path: str) -> str:
+        """Resolve a memory path to a local file path under LOCAL_ROOT."""
+        return os.path.join(self.LOCAL_ROOT, self._resolve_path(path))
+
+    def _read_local(self, path: str) -> str:
+        """Read a local file. Raises FileNotFoundError with helpful message."""
+        local_path = self._local_path(path)
+        try:
+            with open(local_path) as f:
+                return f.read()
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"Local file not found: {local_path}. "
+                f"Fetch it first with memory.fetch('{path}', return_mode='file')."
+            )
+
+    def _write_local(self, path: str, content: str) -> str:
+        """Write content to a local file. Returns the local file path."""
+        local_path = self._local_path(path)
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, 'w') as f:
+            f.write(content)
+        return local_path
+
+    def list_sections(self, path: str) -> List[dict]:
         """
-        List all section headings in a file.
+        List all section headings in a local file.
 
         Args:
-            path:   File path (e.g. 'self/positions')
-            branch: Branch to read from
+            path: File path (e.g. 'self/positions')
 
         Returns:
-            List of heading texts (without ## prefix)
+            List of {'text': heading_text, 'level': heading_level}
         """
-        path = self._resolve_path(path)
-        content = self.fetch(path, return_mode='content', branch=branch)
+        content = self._read_local(path)
         headings = _list_sections(content)
-        return [h.text for h in headings]
+        return [{'text': h.text, 'level': h.level} for h in headings]
 
-    def section_exists(self, path: str, heading: str, branch: str = 'working') -> bool:
+    def section_exists(self, path: str, heading: str, level: Optional[int] = None) -> bool:
         """
-        Check if a section exists in a file.
+        Check if a section exists in a local file.
 
         Args:
             path:    File path
             heading: Heading text to find (partial match)
-            branch:  Branch to read from
+            level:   Optional heading level to disambiguate
 
         Returns:
-            True if section exists
+            True if exactly one matching section exists
         """
-        path = self._resolve_path(path)
-        content = self.fetch(path, return_mode='content', branch=branch)
-        return _find_section(content, heading) is not None
+        content = self._read_local(path)
+        try:
+            return _find_section(content, heading, level) is not None
+        except ValueError:
+            return False  # Ambiguous matches — caller should specify level
 
-    def get_section(self, path: str, heading: str, branch: str = 'working') -> Optional[str]:
+    def get_section(self, path: str, heading: str, level: Optional[int] = None) -> Optional[str]:
         """
-        Get a section's content (without heading).
+        Get a section's content (without heading) from a local file.
 
         Args:
             path:    File path
             heading: Heading text to find
-            branch:  Branch to read from
+            level:   Optional heading level to disambiguate
 
         Returns:
             Section content string, or None if not found
         """
-        path = self._resolve_path(path)
-        content = self.fetch(path, return_mode='content', branch=branch)
-        section = _find_section(content, heading)
+        content = self._read_local(path)
+        section = _find_section(content, heading, level)
         if section is None:
             return None
         return section.get_content(content.encode('utf-8'))
@@ -767,122 +790,88 @@ class MemorySystem:
         path: str,
         heading: str,
         content: str,
-        message: str
+        level: Optional[int] = None
     ) -> str:
         """
-        Replace a section's content (keeping the heading).
+        Replace a section's content in a local file (keeping the heading).
 
-        Token-efficient: only the new content needs to be in Claude's output,
-        not the entire file.
+        Reads the file from LOCAL_ROOT, applies the edit, writes back.
+        Does NOT commit — call memory.commit() separately.
 
         Args:
             path:    File path (e.g. 'self/positions')
             heading: Heading text to find (partial match)
             content: New section content (without heading)
-            message: Commit message
+            level:   Optional heading level to disambiguate
 
         Returns:
-            Commit SHA
+            Local file path (pass to memory.commit(from_file=...))
 
         Raises:
-            ValueError: If section not found
+            ValueError: If section not found or ambiguous
+            FileNotFoundError: If local file doesn't exist
         """
-        path = self._resolve_path(path)
-        self._validate_path(path)
-
-        # Fetch current content from GitHub
-        current = self.fetch(path, return_mode='content', branch='working')
-
-        # Apply section edit
-        new_content = _replace_section_content(current, heading, content)
-
-        # Commit
-        original_branch = self.git.branch
-        try:
-            self.git.checkout('working')
-            return self.git.put(path, new_content, message)
-        finally:
-            self.git.checkout(original_branch)
+        current = self._read_local(path)
+        new_content = _replace_section_content(current, heading, content, level)
+        return self._write_local(path, new_content)
 
     def add_entry(
         self,
         path: str,
         content: str,
-        message: str,
-        after: Optional[str] = None
+        after: Optional[str] = None,
+        after_level: Optional[int] = None
     ) -> str:
         """
-        Add a new entry to a collection file.
+        Add a new entry to a local collection file.
 
-        Token-efficient: only the new entry needs to be in Claude's output.
+        Reads the file from LOCAL_ROOT, appends/inserts entry, writes back.
+        Does NOT commit — call memory.commit() separately.
 
         Args:
-            path:    File path (e.g. 'self/positions')
-            content: New entry content (with heading)
-            message: Commit message
-            after:   Insert after this heading (default: append to end)
+            path:        File path (e.g. 'self/positions')
+            content:     New entry content (with heading)
+            after:       Insert after this heading (default: append to end)
+            after_level: Optional heading level for 'after' disambiguation
 
         Returns:
-            Commit SHA
+            Local file path (pass to memory.commit(from_file=...))
 
         Raises:
-            ValueError: If 'after' heading not found
+            ValueError: If 'after' heading not found or ambiguous
+            FileNotFoundError: If local file doesn't exist
         """
-        path = self._resolve_path(path)
-        self._validate_path(path)
-
-        # Fetch current content from GitHub
-        current = self.fetch(path, return_mode='content', branch='working')
-
-        # Apply section edit
-        new_content = _add_section_entry(current, content, after)
-
-        # Commit
-        original_branch = self.git.branch
-        try:
-            self.git.checkout('working')
-            return self.git.put(path, new_content, message)
-        finally:
-            self.git.checkout(original_branch)
+        current = self._read_local(path)
+        new_content = _add_section_entry(current, content, after, after_level)
+        return self._write_local(path, new_content)
 
     def remove_section(
         self,
         path: str,
         heading: str,
-        message: str
+        level: Optional[int] = None
     ) -> str:
         """
-        Remove a section entirely.
+        Remove a section from a local file.
 
-        Token-efficient: only the heading name needed, not the content.
+        Reads the file from LOCAL_ROOT, removes the section, writes back.
+        Does NOT commit — call memory.commit() separately.
 
         Args:
             path:    File path
             heading: Heading text to find and remove
-            message: Commit message
+            level:   Optional heading level to disambiguate
 
         Returns:
-            Commit SHA
+            Local file path (pass to memory.commit(from_file=...))
 
         Raises:
-            ValueError: If section not found
+            ValueError: If section not found or ambiguous
+            FileNotFoundError: If local file doesn't exist
         """
-        path = self._resolve_path(path)
-        self._validate_path(path)
-
-        # Fetch current content from GitHub
-        current = self.fetch(path, return_mode='content', branch='working')
-
-        # Apply section edit
-        new_content = _remove_section(current, heading)
-
-        # Commit
-        original_branch = self.git.branch
-        try:
-            self.git.checkout('working')
-            return self.git.put(path, new_content, message)
-        finally:
-            self.git.checkout(original_branch)
+        current = self._read_local(path)
+        new_content = _remove_section(current, heading, level)
+        return self._write_local(path, new_content)
 
     # =========================================================================
     # CONSOLIDATION (SQUASH MERGE)
