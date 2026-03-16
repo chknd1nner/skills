@@ -501,7 +501,8 @@ class TestLevelPropagation:
         doc = load_sample('self/multi-level-headings.md')
         result = _replace_section_content(doc, 'Overview', 'Replaced top-level.', level=2)
         assert 'Replaced top-level.' in result
-        assert 'Nested overview' in result  # H3 section untouched
+        # H3 Overview is a subsection of H2 Overview, so it gets replaced too
+        assert 'Nested overview' not in result
 
     def test_replace_section_with_level_3(self):
         doc = load_sample('self/multi-level-headings.md')

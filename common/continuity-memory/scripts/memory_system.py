@@ -214,10 +214,10 @@ def _find_section(doc: str | bytes, target_heading: str, level: Optional[int] = 
     )
 
 
-def _replace_section_content(doc: str | bytes, target_heading: str, new_content: str) -> str:
+def _replace_section_content(doc: str | bytes, target_heading: str, new_content: str, level: Optional[int] = None) -> str:
     """Replace a section's content (keeping the heading)."""
     source = _ensure_bytes(doc)
-    section = _find_section(source, target_heading)
+    section = _find_section(source, target_heading, level)
     if section is None:
         raise ValueError(f"Section '{target_heading}' not found")
     
@@ -229,15 +229,15 @@ def _replace_section_content(doc: str | bytes, target_heading: str, new_content:
     return new_doc.decode('utf-8')
 
 
-def _add_section_entry(doc: str | bytes, new_content: str, after: Optional[str] = None) -> str:
+def _add_section_entry(doc: str | bytes, new_content: str, after: Optional[str] = None, after_level: Optional[int] = None) -> str:
     """Add a new entry to the document."""
     source = _ensure_bytes(doc)
-    
+
     if after is None:
         result = source.rstrip() + b'\n\n---\n\n' + new_content.strip().encode('utf-8') + b'\n'
         return result.decode('utf-8')
-    
-    section = _find_section(source, after)
+
+    section = _find_section(source, after, after_level)
     if section is None:
         raise ValueError(f"Section '{after}' not found")
     
@@ -251,10 +251,10 @@ def _add_section_entry(doc: str | bytes, new_content: str, after: Optional[str] 
     return new_doc.decode('utf-8')
 
 
-def _remove_section(doc: str | bytes, target_heading: str) -> str:
+def _remove_section(doc: str | bytes, target_heading: str, level: Optional[int] = None) -> str:
     """Remove a section entirely."""
     source = _ensure_bytes(doc)
-    section = _find_section(source, target_heading)
+    section = _find_section(source, target_heading, level)
     if section is None:
         raise ValueError(f"Section '{target_heading}' not found")
     
