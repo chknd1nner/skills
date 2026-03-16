@@ -1556,7 +1556,7 @@ class MockGitOperations:
         source = from_ref if from_ref in self._files else 'main'
         self._files[name] = dict(self._files.get(source, {}))
 
-    def diff(self, base, head):
+    def changed_files(self, base, head):
         base_files = self._files.get(base, {})
         head_files = self._files.get(head, {})
         changes = []
