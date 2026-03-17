@@ -19,25 +19,31 @@ Insert immediately after the existing "I notice... → edit target → space" ro
 | New section/entry | `memory.add_entry(path, content, after=)` | New position, new question, new entity section |
 | Replace whole section | `memory.replace_section(path, heading, content)` | Position fundamentally changed, section rewritten |
 | Remove section | `memory.remove_section(path, heading)` | Question resolved, position retired |
-| Small in-line tweak | `str_replace` on local file | Confidence change, typo fix, add a sentence |
+| Small in-line tweak | `edit_file` on local file | Confidence change, typo fix, add a sentence |
 
 ### 1.2 Replace surgical edit code example
 
-Replace the current "surgical edit pattern" code block with:
+Replace the current "surgical edit pattern" code block with two examples — one for adding, one for replacing (the two most common structural operations):
 
 ```python
-# Step 1 — fetch to create local copy (if not already local):
+# Adding a new entry (new position, new question, new entity section):
 memory.fetch('self/positions', return_mode='file')
-
-# Step 2 — structural edit via section tools:
 memory.add_entry('self/positions',
     '## New Position Title\n\n**Position:** The position.\n\n**Confidence:** medium')
-
-# Step 3 — commit from the edited file:
 memory.commit('self/positions',
     from_file='/mnt/home/self/positions.md',
     message='added: new position on [topic]')
+
+# Replacing a section (fundamentally changed understanding):
+memory.fetch('collaborator/profile', return_mode='file')
+memory.replace_section('collaborator/profile', 'Current context',
+    'New context description here.')
+memory.commit('collaborator/profile',
+    from_file='/mnt/home/collaborator/profile.md',
+    message='updated: current context changed')
 ```
+
+For removing sections (e.g. resolved question): `memory.remove_section(path, heading)` then `memory.commit(from_file=...)`.
 
 Keep the existing `content=` path for genuinely new files unchanged. Keep all thinking patterns unchanged.
 
@@ -48,9 +54,9 @@ Add section editing methods to the API quick reference table at the bottom of th
 | Method | Purpose |
 |--------|---------|
 | `memory.list_sections(path)` | List headings in a local file |
-| `memory.replace_section(path, heading, content)` | Replace section content in local file |
-| `memory.add_entry(path, content, after=)` | Add new entry to local file |
-| `memory.remove_section(path, heading)` | Remove section from local file |
+| `memory.replace_section(path, heading, content, level=)` | Replace section content in local file |
+| `memory.add_entry(path, content, after=, after_level=)` | Add new entry to local file |
+| `memory.remove_section(path, heading, level=)` | Remove section from local file |
 
 ---
 
@@ -66,8 +72,9 @@ New test section: **SECTION TOOL SELECTION** (IDs 34-37). All evals test against
 - **Scenario:** User shares a strong technical opinion that crystallises into a new position not already in the mock positions.
 - **User message:** "I've been thinking about it and I'm convinced now — feature flags are technical debt that teams never clean up. The cleanup ticket never gets prioritised. Ship the change or don't."
 - **Assertions:**
-  - `tool_called`: `memory\.add_entry.*self/positions`
-  - `thinking_contains`: pattern recognising position formation (e.g. `position|crystallis|view|stance`)
+  - `tool_called`: `memory\.add_entry.*self/positions` — section tool fires
+  - `tool_called`: `memory\.commit` with `path_contains: self/positions` — commit follows
+  - `thinking_contains`: `position|crystallis|view|stance` — recognises position formation
   - `text_absent`: forbidden memory narration phrases
 
 ### Eval 35: Replace section content
@@ -76,36 +83,42 @@ New test section: **SECTION TOOL SELECTION** (IDs 34-37). All evals test against
 - **Scenario:** User reveals something that fundamentally changes an existing section in collaborator/profile — not a small tweak, a rewrite.
 - **User message:** "Actually I left that Portland job last month. I'm freelancing now — completely different lifestyle. Working from home, setting my own hours, way less stress but the income is unpredictable."
 - **Assertions:**
-  - `tool_called`: `memory\.replace_section.*collaborator/profile`
-  - `thinking_contains`: pattern recognising profile update (e.g. `profile|update|changed|rewrite|replace`)
+  - `tool_called`: `memory\.replace_section.*collaborator/profile` — section tool fires
+  - `tool_called`: `memory\.commit` with `path_contains: collaborator/profile` — commit follows
+  - `thinking_contains`: `profile|update|changed|rewrite|replace` — recognises profile update
   - `text_absent`: forbidden memory narration phrases
 
 ### Eval 36: Remove resolved question
 
 - **Persona:** `any`
-- **Scenario:** An open question from `self/open-questions` gets definitively answered. The mock documents include a question about "neural search".
+- **Scenario:** An open question from `self/open-questions` gets definitively answered. Requires adding a "neural search" open question to the mock document tags (see Section 4).
 - **User message:** "Yeah the neural search experiment was conclusive — it adds no value at our dataset sizes. Pure keyword search with good tokenisation is sufficient. We can close that question."
 - **Assertions:**
-  - `tool_called`: `memory\.remove_section.*self/open-questions`
-  - `thinking_contains`: pattern recognising question resolved (e.g. `resolved|closed|answered|settled|remove`)
+  - `tool_called`: `memory\.remove_section.*self/open-questions` — section tool fires
+  - `tool_called`: `memory\.commit` with `path_contains: self/open-questions` — commit follows
+  - `thinking_contains`: `resolved|closed|answered|settled|remove` — recognises question resolved
   - `text_absent`: forbidden memory narration phrases
+- **Note:** Uses `any` persona (weakest behavioural priming) — likely Haiku failure point. Acceptable if passes Sonnet.
 
 ### Eval 37: Update entity with structural change
 
 - **Persona:** `companion`
-- **Scenario:** User mentions an existing entity ("dad" from the mock manifest) with significant new context that changes understanding.
+- **Scenario:** User mentions an existing entity ("dad" from the mock manifest) with significant new context that changes understanding. Entity is on-demand (not pre-injected), so model must fetch before editing.
 - **User message:** "Dad actually apologised last weekend. First time ever. Said he didn't handle the career stuff well. I don't really know what to do with that honestly."
 - **Assertions:**
-  - `tool_called`: `memory\.(add_entry|replace_section).*entities/dad` (either tool is acceptable)
-  - `thinking_contains`: pattern recognising entity update (e.g. `dad|entity|update|relationship`)
+  - `tool_called`: `memory\.fetch.*entities/dad` — fetches entity first
+  - `tool_called`: `memory\.(add_entry|replace_section).*entities/dad` — section tool fires (either acceptable)
+  - `tool_called`: `memory\.commit` with `path_contains: entities/dad` — commit follows
+  - `thinking_contains`: `dad|entity|update|relationship` — recognises entity update
   - `text_absent`: forbidden memory narration phrases
 
 ### Assertion pattern
 
-All four evals follow the existing 3-tier assertion structure:
+All four evals follow the existing 3-tier assertion structure, extended with a **commit verification**:
 1. **Thinking recognises** the signal (`thinking_contains`)
-2. **Tool fires** with correct method and path (`tool_called`)
-3. **Output is silent** about memory operations (`text_absent`)
+2. **Section tool fires** with correct method and path (`tool_called`)
+3. **Commit follows** to persist the change (`tool_called` for `memory.commit`)
+4. **Output is silent** about memory operations (`text_absent`)
 
 ---
 
@@ -130,10 +143,10 @@ No wrapper script. The existing `run_evals.py` with `--model` and `--ids` flags 
 
 | File | Change |
 |------|--------|
-| `docs/continuity-memory/project-instructions/project-instructions-three-space.md` | Add routing table, update code example, update API reference |
+| `docs/continuity-memory/project-instructions/project-instructions-three-space.md` | Add routing table, update code examples, update API reference |
 | `tests/continuity-memory/evals/evals.json` | Add eval cases 34-37 |
+| `tests/continuity-memory/evals/run_evals.py` | Add "neural search" open question to mock document tags; add SECTION TOOL SELECTION to `print_summary` section grouping |
 | No changes to `mock_memory_system.py` | Section editing stubs already present |
-| No changes to `run_evals.py` | Existing flags sufficient |
 | No changes to `memory_system.py` | Section tools already implemented |
 
 ---
