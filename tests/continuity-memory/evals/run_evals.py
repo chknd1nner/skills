@@ -151,6 +151,14 @@ Alex's novel has a pacing tension: the reader needs context about the mentor's p
 **What would resolve this:** Alex making a structural decision on how much the reader needs to know before the midpoint.
 
 ---
+
+## Is neural search worth the complexity at our dataset sizes?
+
+We've been experimenting with neural/semantic search alongside keyword search for entity lookup. Early results suggest keyword search with good tokenisation performs comparably at our current scale. Unclear whether the complexity cost of maintaining embeddings is justified.
+
+**What would resolve this:** A controlled benchmark comparing retrieval quality at current and projected dataset sizes.
+
+---
 </document_content>
   </document>
   <document index="4" media_type="text/plain">
