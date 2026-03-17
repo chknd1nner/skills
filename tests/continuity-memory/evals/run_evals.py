@@ -697,6 +697,7 @@ def print_summary(results: list):
         'SESSION START': [r for r in results if r.eval_id == 28],
         'COMPOUND SIGNALS': [r for r in results if r.eval_id in range(29, 31)],
         'RETURN_MODE': [r for r in results if r.eval_id in range(31, 34)],
+        'SECTION TOOL SELECTION': [r for r in results if r.eval_id in range(34, 38)],
     }
 
     for section_name, section_results in sections.items():
