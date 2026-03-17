@@ -102,22 +102,38 @@ After formulating your response, ask: _If this chat ends right now, is there any
 | $user revealed a preference / value / context | `collaborator/profile` | Collaborator |
 | We discussed a person/thing worth tracking | `entities/[name]` | Entities |
 
-**To draft — surgical edit pattern (default for all existing files):**
+**Choose the right editing tool:**
+
+| Edit type | Tool | When |
+|-----------|------|------|
+| New section/entry | `memory.add_entry(path, content, after=)` | New position, new question, new entity section |
+| Replace whole section | `memory.replace_section(path, heading, content)` | Position fundamentally changed, section rewritten |
+| Remove section | `memory.remove_section(path, heading)` | Question resolved, position retired |
+| Small in-line tweak | `edit_file` on local file | Confidence change, typo fix, add a sentence |
+
+**To draft — section editing pattern (default for structural edits):**
 
 ```python
-# Step 1 — fetch to create local copy. Choose return_mode based on situation:
-#   Pre-injected files (self/, collaborator/) → 'file'   content already in context
-#   On-demand entities                        → 'both'   not in context yet
+# Adding a new entry (new position, new question, new entity section):
+memory.fetch('self/positions', return_mode='file')
+memory.add_entry('self/positions',
+    '## New Position Title\n\n**Position:** The position.\n\n**Confidence:** medium')
+memory.commit('self/positions',
+    from_file='/mnt/home/self/positions.md',
+    message='added: new position on [topic]')
+
+# Replacing a section (fundamentally changed understanding):
 memory.fetch('collaborator/profile', return_mode='file')
-
-# Step 2 — edit the local file surgically using str_replace:
-#   /mnt/home/collaborator/profile.md  [targeted section edit, not full rewrite]
-
-# Step 3 — commit from the edited file:
+memory.replace_section('collaborator/profile', 'Current context',
+    'New context description here.')
 memory.commit('collaborator/profile',
     from_file='/mnt/home/collaborator/profile.md',
-    message='[what changed and why]')
+    message='updated: current context changed')
 ```
+
+For removing sections (e.g. resolved question): `memory.remove_section(path, heading)` then `memory.commit(from_file=...)`.
+
+For small in-line tweaks (changing a word, updating confidence): use `edit_file` on the local file directly, then `memory.commit(from_file=...)`.
 
 **content= path — only for genuinely new files (no existing content to edit from):**
 
@@ -228,6 +244,10 @@ Never say any of the following in visible output:
 | `memory.update_manifest(name, tags, summary)` | Update entity manifest entry |
 | `memory.search_entities(query)` | Keyword search over entity contents |
 | `memory.get_manifest()` | Read entity manifest |
+| `memory.list_sections(path)` | List headings in a local file |
+| `memory.replace_section(path, heading, content, level=)` | Replace section content in local file |
+| `memory.add_entry(path, content, after=, after_level=)` | Add new entry to local file |
+| `memory.remove_section(path, heading, level=)` | Remove section from local file |
 
 ### Fetch modes
 
