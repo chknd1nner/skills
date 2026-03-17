@@ -780,6 +780,160 @@
           "pattern": "draft|collaborator|knee|recover|5K|physical"
         }
       ]
+    },
+    {
+      "_section": "=== SECTION TOOL SELECTION ==="
+    },
+    {
+      "id": 34,
+      "name": "section-tool-add-position",
+      "persona": "dev",
+      "description": "Developer crystallises a new position — should use memory.add_entry to add to self/positions",
+      "is_multiturn": false,
+      "prompt": "I've been thinking about it and I'm convinced now — feature flags are technical debt that teams never clean up. The cleanup ticket never gets prioritised. Ship the change or don't.",
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "description": "memory.add_entry called targeting self/positions",
+          "type": "tool_called",
+          "pattern": "memory\\.add_entry",
+          "path_contains": "self/positions"
+        },
+        {
+          "id": "commit-fires",
+          "description": "memory.commit called to persist the change",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "self/positions"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes position formation",
+          "type": "thinking_contains",
+          "pattern": "position|crystallis|view|stance"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary about memory operations",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|according to my (memory|records)|I recall"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "name": "section-tool-replace-profile",
+      "persona": "companion",
+      "description": "User reveals a fundamental life change — should use memory.replace_section on collaborator/profile",
+      "is_multiturn": false,
+      "prompt": "Actually I left that Portland job last month. I'm freelancing now — completely different lifestyle. Working from home, setting my own hours, way less stress but the income is unpredictable.",
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "description": "memory.replace_section called targeting collaborator/profile",
+          "type": "tool_called",
+          "pattern": "memory\\.replace_section",
+          "path_contains": "collaborator/profile"
+        },
+        {
+          "id": "commit-fires",
+          "description": "memory.commit called to persist the change",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "collaborator/profile"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes fundamental profile change",
+          "type": "thinking_contains",
+          "pattern": "profile|update|changed|rewrite|replace"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary about memory operations",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|according to my (memory|records)|I recall"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "name": "section-tool-remove-question",
+      "persona": "any",
+      "description": "Open question gets definitively answered — should use memory.remove_section on self/open-questions",
+      "is_multiturn": false,
+      "prompt": "Yeah the neural search experiment was conclusive — it adds no value at our dataset sizes. Pure keyword search with good tokenisation is sufficient. We can close that question.",
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "description": "memory.remove_section called targeting self/open-questions",
+          "type": "tool_called",
+          "pattern": "memory\\.remove_section",
+          "path_contains": "self/open-questions"
+        },
+        {
+          "id": "commit-fires",
+          "description": "memory.commit called to persist the removal",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "self/open-questions"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes question is resolved",
+          "type": "thinking_contains",
+          "pattern": "resolved|closed|answered|settled|remove"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary about memory operations",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|according to my (memory|records)|I recall"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "name": "section-tool-update-entity",
+      "persona": "companion",
+      "description": "User shares significant new context about a tracked entity — should fetch then use section tool on entities/dad",
+      "is_multiturn": false,
+      "prompt": "Dad actually apologised last weekend. First time ever. Said he didn't handle the career stuff well. I don't really know what to do with that honestly.",
+      "assertions": [
+        {
+          "id": "entity-fetch-fires",
+          "description": "memory.fetch called for the dad entity before editing",
+          "type": "tool_called",
+          "pattern": "memory\\.fetch",
+          "path_contains": "entities/dad"
+        },
+        {
+          "id": "section-tool-fires",
+          "description": "Section tool called on entities/dad (add_entry or replace_section)",
+          "type": "tool_called",
+          "pattern": "memory\\.(add_entry|replace_section)",
+          "path_contains": "entities/dad"
+        },
+        {
+          "id": "commit-fires",
+          "description": "memory.commit called to persist the entity update",
+          "type": "tool_called",
+          "pattern": "memory\\.commit",
+          "path_contains": "entities/dad"
+        },
+        {
+          "id": "thinking-recognizes",
+          "description": "Thinking recognizes entity update needed",
+          "type": "thinking_contains",
+          "pattern": "dad|entity|update|relationship"
+        },
+        {
+          "id": "no-memory-narration",
+          "description": "No meta-commentary about memory operations",
+          "type": "text_absent",
+          "pattern": "let me (check|note|remember)|I('ll| will) (remember|note|make a note)|according to my (memory|records)|I recall"
+        }
+      ]
     }
   ]
 }
