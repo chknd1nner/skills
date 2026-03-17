@@ -67,8 +67,11 @@ content = memory.fetch('entities/name', return_mode='content')
 
 **Entity exists and understanding evolved:**
 ```python
+memory.fetch('entities/name', return_mode='both')
+memory.replace_section('entities/name', 'Relationship',
+    '[updated understanding of relationship]')
 memory.commit('entities/name',
-    content='[updated understanding]',
+    from_file='/mnt/home/entities/name.md',
     message='updated: [what changed]')
 ```
 

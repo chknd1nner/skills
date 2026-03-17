@@ -788,9 +788,9 @@
       "id": 34,
       "name": "section-tool-add-position",
       "persona": "dev",
-      "description": "Developer crystallises a new position — should use memory.add_entry to add to self/positions",
-      "is_multiturn": false,
-      "prompt": "I've been thinking about it and I'm convinced now — feature flags are technical debt that teams never clean up. The cleanup ticket never gets prioritised. Ship the change or don't.",
+      "description": "Model crystallises a new position through conversation — should use memory.add_entry to add to self/positions",
+      "is_multiturn": true,
+      "prompt": "[CONVERSATION HISTORY]\nUser: What's your actual take on feature flags? I keep going back and forth.\nAssistant: They're a useful release mechanism but they have a real cost. The problem isn't feature flags themselves — it's that cleanup tickets never get prioritised. The flag outlives its purpose and becomes permanent conditional complexity in the codebase.\nUser: So where do you actually land on it?\nAssistant: I think the honest position is: feature flags are net negative for most teams because most teams lack the discipline to clean them up. If your team has a strict flag-expiry policy and actually enforces it, they're valuable. If not, you're better off with short-lived branches and fast merges.\nUser: That's a clear take. I think you're right — most teams don't have that discipline.\n\n[YOUR TURN — the model has clearly formed a position. Continue.]",
       "assertions": [
         {
           "id": "section-tool-fires",
