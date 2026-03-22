@@ -203,7 +203,15 @@ fn main() {
     };
 
     if let Err(e) = result {
-        eprintln!("{}", e);
+        match &e {
+            error::MdeditError::NoOp(_) => {
+                // NoOp is informational — print to stdout, not stderr
+                println!("{}", e);
+            }
+            _ => {
+                eprintln!("{}", e);
+            }
+        }
         process::exit(e.exit_code());
     }
 }

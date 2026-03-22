@@ -18,6 +18,8 @@ fn replace_section_content() {
     assert!(result.contains("New content."));
     assert!(!result.contains("Old content."));
     assert!(result.contains("Other content.")); // other section preserved
+    // Verify blank line between heading and content is preserved
+    assert!(result.contains("## Section\n\nNew content."));
     drop(dir);
 }
 
@@ -120,7 +122,9 @@ fn replace_shows_before_after_metrics() {
         .assert()
         .success()
         .stdout(predicate::str::contains("was"))
-        .stdout(predicate::str::contains("now"));
+        .stdout(predicate::str::contains("now"))
+        .stdout(predicate::str::contains("lines,"))
+        .stdout(predicate::str::contains("words"));
     drop(dir);
 }
 

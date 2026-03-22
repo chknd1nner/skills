@@ -1,5 +1,3 @@
-use std::process;
-
 use crate::addressing::{resolve, ResolvedSection};
 use crate::content::resolve_content;
 use crate::counting::word_count;
@@ -46,12 +44,14 @@ pub fn run(
     // 3. Resolve new content
     let new_content_raw = resolve_content(content, from_file)?;
 
-    // Normalise the new content: ensure it ends with a newline
-    let new_content = if new_content_raw.ends_with('\n') {
-        new_content_raw.clone()
-    } else {
-        format!("{}\n", new_content_raw)
-    };
+    // Normalise the new content: ensure blank line before content (heading separator)
+    // and trailing newline. The own_content_range starts right after the heading's \n,
+    // so the splice target includes the blank line separator — we must restore it.
+    let new_content = format!(
+        "\n{}{}",
+        new_content_raw,
+        if new_content_raw.ends_with('\n') { "" } else { "\n" }
+    );
 
     // 4. Determine byte range to replace
     // Default: replace own content + children (own_content_range.start..full_range.end)
@@ -71,8 +71,7 @@ pub fn run(
     let old_trimmed = old_content.trim();
     let new_trimmed = new_content.trim();
     if old_trimmed == new_trimmed {
-        println!("NO CHANGE: Section content is identical to replacement");
-        process::exit(10);
+        return Err(MdeditError::NoOp("Section content is identical to replacement".to_string()));
     }
 
     // 7. Calculate metrics for display
