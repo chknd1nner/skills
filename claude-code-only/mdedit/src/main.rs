@@ -152,12 +152,21 @@ enum FrontmatterAction {
 fn main() {
     let cli = Cli::parse();
 
-    match cli.command {
-        // Commands will be dispatched here as they are implemented.
-        // For now, each prints "not yet implemented" and exits.
+    let result: Result<(), error::MdeditError> = match cli.command {
+        Commands::Outline { file, max_depth } => {
+            commands::outline::run(&file, max_depth)
+        }
+        Commands::Extract { file, section, no_children, to_file } => {
+            commands::extract::run(&file, &section, no_children, to_file.as_deref())
+        }
         _ => {
             eprintln!("Command not yet implemented");
             process::exit(1);
         }
+    };
+
+    if let Err(e) = result {
+        eprintln!("{}", e);
+        process::exit(e.exit_code());
     }
 }
