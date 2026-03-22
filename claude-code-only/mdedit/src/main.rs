@@ -214,9 +214,22 @@ fn main() {
                 dry_run,
             )
         }
-        _ => {
-            eprintln!("Command not yet implemented");
-            process::exit(1);
+        Commands::Insert { file, after, before, heading, content, from_file, dry_run } => {
+            commands::insert::run(
+                &file,
+                after.as_deref(),
+                before.as_deref(),
+                &heading,
+                content.as_deref(),
+                from_file.as_deref(),
+                dry_run,
+            )
+        }
+        Commands::Delete { file, section, dry_run } => {
+            commands::delete::run(&file, &section, dry_run)
+        }
+        Commands::Rename { file, section, new_name, dry_run } => {
+            commands::rename::run(&file, &section, &new_name, dry_run)
         }
     };
 
