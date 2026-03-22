@@ -1,4 +1,3 @@
-use crate::counting::section_own_word_count;
 use crate::error::{MdeditError, Severity, ValidationIssue};
 use crate::parser;
 
@@ -40,14 +39,11 @@ pub fn run(file: &str) -> Result<(), MdeditError> {
         }
     }
 
-    // Check 2: Empty sections (heading with no own content lines)
+    // Check 2: Empty sections (leaf heading with no own content lines)
     for (section, _parent) in &all_sections {
-        let own_words = section_own_word_count(&doc, section);
-        // Also check if own_content_range is empty (no content text at all)
         let own_content = doc.slice(&section.own_content_range);
         let has_content = own_content.lines().any(|l| !l.trim().is_empty());
         if !has_content && section.children.is_empty() {
-            // Leaf section with no content
             issues.push(ValidationIssue {
                 severity: Severity::Warning,
                 line: section.line_start,
@@ -56,10 +52,7 @@ pub fn run(file: &str) -> Result<(), MdeditError> {
                     section.full_heading(),
                 ),
             });
-        } else if !has_content && own_words == 0 && section.children.is_empty() {
-            // Covered above
         }
-        let _ = own_words; // suppress unused warning
     }
 
     // Check 3: Duplicate heading text at the same level (ambiguity risk for addressing)
