@@ -159,6 +159,15 @@ fn main() {
         Commands::Extract { file, section, no_children, to_file } => {
             commands::extract::run(&file, &section, no_children, to_file.as_deref())
         }
+        Commands::Search { file, query, case_sensitive } => {
+            commands::search::run(&file, &query, case_sensitive)
+        }
+        Commands::Stats { file } => {
+            commands::stats::run(&file)
+        }
+        Commands::Validate { file } => {
+            commands::validate::run(&file)
+        }
         _ => {
             eprintln!("Command not yet implemented");
             process::exit(1);
