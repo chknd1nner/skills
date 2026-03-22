@@ -6,13 +6,108 @@ pub fn is_tty() -> bool {
 }
 
 /// Format the neighborhood view for a write operation.
-/// Shows previous section, target section, next section.
+/// Shows previous section, target section (with → marker), next section.
+///
+/// The marker is placed before the target section heading line.
+/// `target_content_preview` is the new content (after the operation).
 pub fn format_neighborhood(
-    _doc: &Document,
-    _target: &Section,
-    _marker: &str, // "→" for modified, "✗" for deleted, "+" prefix for added
+    doc: &Document,
+    target: &Section,
+    action_label: &str,     // "REPLACED", "WOULD REPLACE", etc.
+    summary: &str,          // "(was 12 lines → now 8 lines)"
+    new_content: &str,      // the new content text (after operation)
+    warnings: &[String],
+    dry_run: bool,
 ) -> String {
-    todo!() // Implement in Task 8 when write commands need it
+    let mut out = String::new();
+
+    // Header line
+    if dry_run {
+        out.push_str("DRY RUN — no changes written\n\n");
+    }
+
+    // "REPLACED: "## Background" (was 12 lines, 312 words → now 8 lines, 198 words)"
+    out.push_str(&format!("{}: \"{}\" {}\n", action_label, target.full_heading(), summary));
+
+    // Warnings
+    for w in warnings {
+        out.push_str(&format!("⚠ {}\n", w));
+    }
+
+    out.push('\n');
+
+    // Previous section
+    if let Some(prev) = find_previous_section(doc, target) {
+        out.push_str(&format_section_preview(doc, prev));
+        out.push('\n');
+    }
+
+    // Target section with → marker
+    // Show the new content (after operation)
+    let new_lines: Vec<&str> = new_content.lines().collect();
+    let non_empty_new: Vec<&str> = new_lines.iter()
+        .copied()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+
+    out.push_str(&format!("→ {}\n", target.full_heading()));
+    if let Some(first) = non_empty_new.first() {
+        out.push_str(&format!("  {}\n", first));
+    }
+    let remaining = if non_empty_new.len() > 1 { non_empty_new.len() - 1 } else { 0 };
+    if remaining > 1 {
+        out.push_str(&format!("  [{} more lines]\n", remaining - 1));
+        // Show last line
+        if let Some(last) = non_empty_new.last() {
+            if non_empty_new.len() > 1 {
+                out.push_str(&format!("  {}\n", last));
+            }
+        }
+    } else if remaining == 1 {
+        // Just show the second (last) line directly
+        if let Some(last) = non_empty_new.last() {
+            out.push_str(&format!("  {}\n", last));
+        }
+    }
+
+    // Next section
+    out.push('\n');
+    if let Some(next) = find_next_section(doc, target) {
+        out.push_str(&format_section_preview(doc, next));
+    } else {
+        out.push_str("  [end of document]\n");
+    }
+
+    out
+}
+
+/// Find the section that immediately precedes `target` in document order.
+/// Uses the flat all_sections list and finds the entry just before target.
+fn find_previous_section<'a>(doc: &'a Document, target: &Section) -> Option<&'a Section> {
+    let all = doc.all_sections();
+    let mut prev: Option<&Section> = None;
+    for (section, _) in &all {
+        if std::ptr::eq(*section, target) {
+            return prev;
+        }
+        prev = Some(section);
+    }
+    None
+}
+
+/// Find the section that immediately follows `target` in document order.
+fn find_next_section<'a>(doc: &'a Document, target: &Section) -> Option<&'a Section> {
+    let all = doc.all_sections();
+    let mut found = false;
+    for (section, _) in &all {
+        if found {
+            return Some(section);
+        }
+        if std::ptr::eq(*section, target) {
+            found = true;
+        }
+    }
+    None
 }
 
 /// Format a section summary for neighborhood view:

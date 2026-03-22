@@ -186,6 +186,16 @@ fn main() {
                 commands::frontmatter::run_delete(&file, &key, dry_run)
             }
         },
+        Commands::Replace { file, section, content, from_file, preserve_children, dry_run } => {
+            commands::replace::run(
+                &file,
+                &section,
+                content.as_deref(),
+                from_file.as_deref(),
+                preserve_children,
+                dry_run,
+            )
+        }
         _ => {
             eprintln!("Command not yet implemented");
             process::exit(1);
