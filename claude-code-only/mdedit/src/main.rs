@@ -196,6 +196,24 @@ fn main() {
                 dry_run,
             )
         }
+        Commands::Append { file, section, content, from_file, dry_run } => {
+            commands::append::run(
+                &file,
+                &section,
+                content.as_deref(),
+                from_file.as_deref(),
+                dry_run,
+            )
+        }
+        Commands::Prepend { file, section, content, from_file, dry_run } => {
+            commands::prepend::run(
+                &file,
+                &section,
+                content.as_deref(),
+                from_file.as_deref(),
+                dry_run,
+            )
+        }
         _ => {
             eprintln!("Command not yet implemented");
             process::exit(1);
