@@ -57,7 +57,8 @@ pub fn run(
     let splice_point = section.own_content_range.start;
 
     // Build the content to insert: \n + prepended content
-    // This replaces the existing \n at own_content_range.start (the blank line separator)
+    // This adds a blank line before the prepended content; the doubled separator
+    // (original \n at own_content_range.start + this new \n) is corrected by normalise()
     let prepend_content = format!("\n{}", prepend_content_with_newline);
 
     // 5. Get existing own content for display

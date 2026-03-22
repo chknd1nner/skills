@@ -86,3 +86,44 @@ fn prepend_dry_run() {
     assert!(!result.contains("New.")); // unchanged
     drop(dir);
 }
+
+#[test]
+fn prepend_from_file() {
+    let (dir, file) = common::temp_md_file(
+        "# Doc\n\n## Section\n\nExisting.\n"
+    );
+    let content_file = dir.path().join("content.txt");
+    std::fs::write(&content_file, "From file content.").unwrap();
+
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["prepend", file.to_str().unwrap(), "Section", "--from-file", content_file.to_str().unwrap()])
+        .assert()
+        .success();
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("From file content."));
+    let prepended_pos = result.find("From file content.").unwrap();
+    let existing_pos = result.find("Existing.").unwrap();
+    assert!(prepended_pos < existing_pos);
+    drop(dir);
+}
+
+#[test]
+fn prepend_multiline_content() {
+    let (dir, file) = common::temp_md_file(
+        "# Doc\n\n## Section\n\nExisting.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["prepend", file.to_str().unwrap(), "Section", "--content", "Line one.\nLine two."])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("+ Line one."))
+        .stdout(predicate::str::contains("+ Line two."));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("Line one.\nLine two."));
+    let multiline_pos = result.find("Line one.").unwrap();
+    let existing_pos = result.find("Existing.").unwrap();
+    assert!(multiline_pos < existing_pos);
+    drop(dir);
+}
