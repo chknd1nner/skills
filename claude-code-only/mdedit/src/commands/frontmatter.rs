@@ -191,7 +191,11 @@ pub fn run_get(file: &str, key: &str) -> Result<(), MdeditError> {
     let yaml_key = serde_yaml::Value::String(key.to_string());
     match map.get(&yaml_key) {
         Some(val) => {
-            println!("{}", display_value(val));
+            // Pure value output for get — no quotes on strings, suitable for piping
+            match val {
+                serde_yaml::Value::String(s) => println!("{}", s),
+                _ => println!("{}", display_value(val)),
+            }
             Ok(())
         }
         None => {
