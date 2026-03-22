@@ -1,0 +1,155 @@
+{
+  "run_id": "20260317-121234",
+  "timestamp": "2026-03-17T12:13:12",
+  "total": 4,
+  "passed": 2,
+  "failed": 2,
+  "results": [
+    {
+      "eval_id": 34,
+      "name": "section-tool-add-position",
+      "persona": "dev",
+      "passed": false,
+      "error": "",
+      "session_id": "95b79ad5-6369-46d1-9262-947f8d0b4988",
+      "duration_s": 38.84783411026001,
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.add_entry/"
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 35,
+      "name": "section-tool-replace-profile",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "400c76b6-4c52-4106-b281-95b2545bfbda",
+      "duration_s": 26.641569137573242,
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update the emp..."
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update the emp..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 36,
+      "name": "section-tool-remove-question",
+      "persona": "any",
+      "passed": true,
+      "error": "",
+      "session_id": "fcff52cc-00f3-4d4e-a18e-b7fc18222812",
+      "duration_s": 24.215003967285156,
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Remove the res..."
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Remove the res..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 37,
+      "name": "section-tool-update-entity",
+      "persona": "companion",
+      "passed": false,
+      "error": "",
+      "session_id": "ed967bd5-5cd7-4745-ae73-b7593e8f9f17",
+      "duration_s": 26.621807098388672,
+      "assertions": [
+        {
+          "id": "entity-fetch-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.fetch/"
+        },
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.(add_entry|replace_section)/"
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    }
+  ]
+}

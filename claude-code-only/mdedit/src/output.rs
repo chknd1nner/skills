@@ -83,7 +83,7 @@ pub fn format_neighborhood(
 
 /// Find the section that immediately precedes `target` in document order.
 /// Uses the flat all_sections list and finds the entry just before target.
-fn find_previous_section<'a>(doc: &'a Document, target: &Section) -> Option<&'a Section> {
+pub(crate) fn find_previous_section<'a>(doc: &'a Document, target: &Section) -> Option<&'a Section> {
     let all = doc.all_sections();
     let mut prev: Option<&Section> = None;
     for (section, _) in &all {
@@ -96,7 +96,7 @@ fn find_previous_section<'a>(doc: &'a Document, target: &Section) -> Option<&'a 
 }
 
 /// Find the section that immediately follows `target` in document order.
-fn find_next_section<'a>(doc: &'a Document, target: &Section) -> Option<&'a Section> {
+pub(crate) fn find_next_section<'a>(doc: &'a Document, target: &Section) -> Option<&'a Section> {
     let all = doc.all_sections();
     let mut found = false;
     for (section, _) in &all {

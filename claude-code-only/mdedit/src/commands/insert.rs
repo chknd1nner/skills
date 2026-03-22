@@ -1,8 +1,8 @@
 use crate::addressing::{resolve, ResolvedSection};
 use crate::content::resolve_content;
-use crate::counting::word_count;
 use crate::error::MdeditError;
 use crate::parser;
+use crate::output::format_section_preview;
 use crate::whitespace::normalise;
 
 pub fn run(
@@ -39,11 +39,14 @@ pub fn run(
         format!("{}\n", full_heading)
     };
 
-    // Determine splice point and anchor level for warning
-    let (splice_point, anchor_level) = if let Some(after_query) = after {
+    // Determine splice point, anchor info for summary and neighborhood
+    let (splice_point, anchor_level, anchor_heading, is_after) = if let Some(after_query) = after {
         let resolved = resolve(&doc, after_query).map_err(|e| enrich_error(e, file))?;
         match resolved {
-            ResolvedSection::Found(s) => (s.full_range.end, Some(s.level)),
+            ResolvedSection::Found(s) => {
+                let heading = s.full_heading();
+                (s.full_range.end, Some(s.level), Some(heading), true)
+            }
             ResolvedSection::Preamble => {
                 // Insert after preamble = before first section
                 let point = if let Some(first) = doc.sections.first() {
@@ -55,7 +58,7 @@ pub fn run(
                 } else {
                     0
                 };
-                (point, None)
+                (point, None, Some("_preamble".to_string()), true)
             }
         }
     } else if let Some(before_query) = before {
@@ -67,7 +70,10 @@ pub fn run(
         }
         let resolved = resolve(&doc, before_query).map_err(|e| enrich_error(e, file))?;
         match resolved {
-            ResolvedSection::Found(s) => (s.full_range.start, Some(s.level)),
+            ResolvedSection::Found(s) => {
+                let heading = s.full_heading();
+                (s.full_range.start, Some(s.level), Some(heading), false)
+            }
             ResolvedSection::Preamble => {
                 return Err(MdeditError::InvalidOperation(
                     "insert --before _preamble is not valid; use prepend to _preamble instead"
@@ -92,15 +98,16 @@ pub fn run(
         }
     }
 
-    // Word count
-    let words = section_content
+    // Line count of inserted content
+    let content_lines = section_content
         .as_ref()
-        .map(|c| word_count(c, &(0..c.len())))
+        .map(|c| c.lines().count())
         .unwrap_or(0);
 
-    // Summary
+    // Summary: INSERTED: "## Name" (N lines) after "## Anchor"
     let action_label = if dry_run { "WOULD INSERT" } else { "INSERTED" };
-    let summary = format!("({} words)", words);
+    let position_text = if is_after { "after" } else { "before" };
+    let anchor_text = anchor_heading.as_deref().unwrap_or("unknown");
 
     // Build output
     let mut output = String::new();
@@ -108,25 +115,115 @@ pub fn run(
         output.push_str("DRY RUN \u{2014} no changes written\n\n");
     }
     output.push_str(&format!(
-        "{}: \"{}\" {}\n",
-        action_label, full_heading, summary
+        "{}: \"{}\" ({} lines) {} \"{}\"\n",
+        action_label, full_heading, content_lines, position_text, anchor_text
     ));
     for w in &warnings {
         output.push_str(&format!("\u{26a0} {}\n", w));
     }
-    output.push_str(&format!("\n\u{2192} {}\n", full_heading));
-    if let Some(ref c) = section_content {
-        let non_empty: Vec<&str> = c.lines().filter(|l| !l.trim().is_empty()).collect();
-        if let Some(first) = non_empty.first() {
-            output.push_str(&format!("  {}\n", first));
-        }
-        if non_empty.len() > 2 {
-            output.push_str(&format!("  [{} more lines]\n", non_empty.len() - 2));
-            if let Some(last) = non_empty.last() {
-                output.push_str(&format!("  {}\n", last));
+
+    output.push('\n');
+
+    // Neighborhood context: find previous/next sections relative to the anchor
+    // For --after: prev = anchor, target = new section, next = section after anchor
+    // For --before: prev = section before anchor, target = new section, next = anchor
+    let all_sections = doc.all_sections();
+    if is_after {
+        // Previous section = the anchor (show it as context)
+        if let Some(anchor_ref) = anchor_heading.as_deref() {
+            if anchor_ref == "_preamble" {
+                // No previous section to show for preamble
+            } else {
+                // Find the anchor section in the document
+                if let Some((anchor_sec, _)) = all_sections.iter().find(|(s, _)| s.full_heading() == anchor_ref) {
+                    output.push_str(&format_section_preview(&doc, anchor_sec));
+                    output.push('\n');
+                }
             }
-        } else if non_empty.len() == 2 {
-            output.push_str(&format!("  {}\n", non_empty[1]));
+        }
+
+        // Target: new section
+        output.push_str(&format!("\u{2192} {}\n", full_heading));
+        if let Some(ref c) = section_content {
+            let non_empty: Vec<&str> = c.lines().filter(|l| !l.trim().is_empty()).collect();
+            if let Some(first) = non_empty.first() {
+                output.push_str(&format!("  {}\n", first));
+            }
+            if non_empty.len() > 2 {
+                output.push_str(&format!("  [{} more lines]\n", non_empty.len() - 2));
+                if let Some(last) = non_empty.last() {
+                    output.push_str(&format!("  {}\n", last));
+                }
+            } else if non_empty.len() == 2 {
+                output.push_str(&format!("  {}\n", non_empty[1]));
+            }
+        }
+
+        // Next section = section after the anchor in original doc
+        output.push('\n');
+        if let Some(anchor_ref) = anchor_heading.as_deref() {
+            if anchor_ref == "_preamble" {
+                if let Some(first) = doc.sections.first() {
+                    output.push_str(&format_section_preview(&doc, first));
+                } else {
+                    output.push_str("  [end of document]\n");
+                }
+            } else {
+                let mut found_next = false;
+                for i in 0..all_sections.len() {
+                    if all_sections[i].0.full_heading() == anchor_ref {
+                        if i + 1 < all_sections.len() {
+                            output.push_str(&format_section_preview(&doc, all_sections[i + 1].0));
+                            found_next = true;
+                        }
+                        break;
+                    }
+                }
+                if !found_next {
+                    output.push_str("  [end of document]\n");
+                }
+            }
+        } else {
+            output.push_str("  [end of document]\n");
+        }
+    } else {
+        // --before: prev = section before anchor, target = new, next = anchor
+        if let Some(anchor_ref) = anchor_heading.as_deref() {
+            // Find the section before the anchor
+            for i in 0..all_sections.len() {
+                if all_sections[i].0.full_heading() == anchor_ref {
+                    if i > 0 {
+                        output.push_str(&format_section_preview(&doc, all_sections[i - 1].0));
+                        output.push('\n');
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Target: new section
+        output.push_str(&format!("\u{2192} {}\n", full_heading));
+        if let Some(ref c) = section_content {
+            let non_empty: Vec<&str> = c.lines().filter(|l| !l.trim().is_empty()).collect();
+            if let Some(first) = non_empty.first() {
+                output.push_str(&format!("  {}\n", first));
+            }
+            if non_empty.len() > 2 {
+                output.push_str(&format!("  [{} more lines]\n", non_empty.len() - 2));
+                if let Some(last) = non_empty.last() {
+                    output.push_str(&format!("  {}\n", last));
+                }
+            } else if non_empty.len() == 2 {
+                output.push_str(&format!("  {}\n", non_empty[1]));
+            }
+        }
+
+        // Next section = the anchor
+        output.push('\n');
+        if let Some(anchor_ref) = anchor_heading.as_deref() {
+            if let Some((anchor_sec, _)) = all_sections.iter().find(|(s, _)| s.full_heading() == anchor_ref) {
+                output.push_str(&format_section_preview(&doc, anchor_sec));
+            }
         }
     }
 

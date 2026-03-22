@@ -1,6 +1,7 @@
 use crate::addressing::{resolve, ResolvedSection};
 use crate::counting::word_count;
 use crate::error::MdeditError;
+use crate::output::{find_next_section, find_previous_section, format_section_preview};
 use crate::parser;
 use crate::whitespace::normalise;
 
@@ -98,7 +99,8 @@ pub fn run(file: &str, section_query: &str, dry_run: bool) -> Result<(), MdeditE
 
     // Build output
     let action_label = if dry_run { "WOULD DELETE" } else { "DELETED" };
-    let summary = format!("({} lines, {} words)", deleted_lines, deleted_words);
+    // Summary: DELETED: "## Appendix" (8 lines, 145 words removed)
+    let summary = format!("({} lines, {} words removed)", deleted_lines, deleted_words);
 
     let mut output = String::new();
     if dry_run {
@@ -114,26 +116,45 @@ pub fn run(file: &str, section_query: &str, dry_run: bool) -> Result<(), MdeditE
         output.push_str(&format!("\u{26a0} {}\n", w));
     }
 
-    // Show deleted content preview with cross mark prefix
+    // Neighborhood context
+    output.push('\n');
+
+    // Previous section
+    if let Some(prev) = find_previous_section(&doc, section) {
+        output.push_str(&format_section_preview(&doc, prev));
+        output.push('\n');
+    }
+
+    // Deleted section with ✗ marker and (deleted) annotation
     let content_text = doc.slice(&section.own_content_range).trim();
     let content_lines: Vec<&str> = content_text
         .lines()
         .filter(|l| !l.trim().is_empty())
         .collect();
+
+    output.push_str(&format!("\u{2717} {} (deleted)\n", section.full_heading()));
     if !content_lines.is_empty() {
-        output.push('\n');
-        output.push_str(&format!("\u{2717} {}\n", section.full_heading()));
+        // First line with Was: prefix
         if let Some(first) = content_lines.first() {
-            output.push_str(&format!("  {}\n", first));
+            output.push_str(&format!("  Was: \"{}\"\n", first));
         }
         if content_lines.len() > 2 {
             output.push_str(&format!("  [{} more lines]\n", content_lines.len() - 2));
+            // Last line with Was: prefix
             if let Some(last) = content_lines.last() {
-                output.push_str(&format!("  {}\n", last));
+                output.push_str(&format!("  Was: \"{}\"\n", last));
             }
         } else if content_lines.len() == 2 {
-            output.push_str(&format!("  {}\n", content_lines[1]));
+            output.push_str(&format!("  Was: \"{}\"\n", content_lines[1]));
         }
+    }
+
+    // Next section
+    output.push('\n');
+    if let Some(next) = find_next_section(&doc, section) {
+        output.push_str(&format_section_preview(&doc, next));
+    } else {
+        output.push_str("  [end of document]\n");
     }
 
     if dry_run {

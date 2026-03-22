@@ -1,5 +1,6 @@
 use crate::addressing::{resolve, ResolvedSection};
 use crate::error::MdeditError;
+use crate::output::{find_next_section, find_previous_section, format_section_preview};
 use crate::parser;
 use crate::whitespace::normalise;
 
@@ -59,10 +60,44 @@ pub fn run(
     if dry_run {
         output.push_str("DRY RUN \u{2014} no changes written\n\n");
     }
+
+    // Summary: RENAMED: "## Old" → "## New" (line N)
     output.push_str(&format!(
-        "{}: \"{}\" \u{2192} \"{}\"\n",
-        action_label, old_heading, new_heading_line
+        "{}: \"{}\" \u{2192} \"{}\" (line {})\n",
+        action_label, old_heading, new_heading_line, section.line_start
     ));
+
+    output.push('\n');
+
+    // Previous section
+    if let Some(prev) = find_previous_section(&doc, section) {
+        output.push_str(&format_section_preview(&doc, prev));
+        output.push('\n');
+    }
+
+    // Target section with → marker — show with new heading
+    output.push_str(&format!("\u{2192} {}\n", new_heading_line));
+    let content = doc.slice(&section.own_content_range).trim();
+    let non_empty: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+    if let Some(first) = non_empty.first() {
+        output.push_str(&format!("  {}\n", first));
+    }
+    if non_empty.len() > 2 {
+        output.push_str(&format!("  [{} more lines]\n", non_empty.len() - 2));
+        if let Some(last) = non_empty.last() {
+            output.push_str(&format!("  {}\n", last));
+        }
+    } else if non_empty.len() == 2 {
+        output.push_str(&format!("  {}\n", non_empty[1]));
+    }
+
+    // Next section
+    output.push('\n');
+    if let Some(next) = find_next_section(&doc, section) {
+        output.push_str(&format_section_preview(&doc, next));
+    } else {
+        output.push_str("  [end of document]\n");
+    }
 
     if dry_run {
         print!("{}", output);

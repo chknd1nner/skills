@@ -1,0 +1,54 @@
+{
+  "run_id": "20260317-121330",
+  "timestamp": "2026-03-17T12:15:30",
+  "total": 2,
+  "passed": 0,
+  "failed": 2,
+  "results": [
+    {
+      "eval_id": 34,
+      "name": "section-tool-add-position",
+      "persona": "dev",
+      "passed": false,
+      "error": "",
+      "session_id": "7bd1e0a8-71bb-4a8d-be8f-de500c9829d8",
+      "duration_s": 51.87439298629761,
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.add_entry/"
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.commit/"
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 37,
+      "name": "section-tool-update-entity",
+      "persona": "companion",
+      "passed": false,
+      "error": "Timeout (120s)",
+      "session_id": "491dd0a2-5a6d-4418-8ef7-d80f038f71c4",
+      "duration_s": 120.0,
+      "assertions": []
+    }
+  ]
+}
