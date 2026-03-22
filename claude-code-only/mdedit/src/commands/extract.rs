@@ -1,5 +1,5 @@
 use crate::addressing::{resolve, ResolvedSection};
-use crate::counting::{section_own_word_count, section_word_count};
+use crate::counting::{self, section_own_word_count, section_word_count};
 use crate::document::Section;
 use crate::error::MdeditError;
 use crate::parser;
@@ -50,14 +50,14 @@ fn extract_preamble(
         std::fs::write(out_path, &content)
             .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", out_path, e)))?;
         let lines = content.lines().count();
-        let words = content.split_whitespace().count();
+        let words = counting::word_count(&content, &(0..content.len()));
         println!("EXTRACTED: \"_preamble\" ({} lines, {} words) → {}", lines, words, out_path);
     } else {
         // Always show metadata header (whether TTY or piped)
         if content.is_empty() {
             println!("SECTION: \"_preamble\" — 0 words\n\n[no content]");
         } else {
-            let words = content.split_whitespace().count();
+            let words = counting::word_count(&content, &(0..content.len()));
             println!("SECTION: \"_preamble\" — {} words\n\n{}", words, content);
         }
     }

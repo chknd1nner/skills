@@ -38,12 +38,13 @@ fn print_section(doc: &Document, section: &Section, depth: usize, max_depth: Opt
     let empty_flag = if words == 0 { " ⚠ empty" } else { "" };
 
     if depth == 0 && section.level == 1 {
-        // Root H1: show total word count and total lines
-        let total_lines = section.line_count();
+        // Root H1: show total document word count and lines
+        let total_lines = doc.source.lines().count();
         println!(
             "{}{} — {} words, {} lines{}",
             indent, heading, words, total_lines, empty_flag
         );
+        println!(); // blank line after H1 per spec
     } else {
         // Other sections: show word count and line range
         println!(
