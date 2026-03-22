@@ -76,28 +76,25 @@ fn resolve_by_path<'a>(
     query: &str,
 ) -> Result<ResolvedSection<'a>, MdeditError> {
     let components: Vec<&str> = query.split('/').collect();
-    if components.is_empty() {
-        return Err(not_found_error(doc, query));
-    }
 
-    // Find the first component among top-level sections (recursively)
+    // Find all sections matching the first path component
     let all = doc.all_sections();
     let first_name = components[0];
 
-    // Start by finding all sections matching the first component
-    let mut candidates: Vec<&Section> = all
+    // Track (section, parent) pairs through the walk
+    let mut candidates: Vec<(&Section, Option<&Section>)> = all
         .iter()
         .filter(|(s, _)| s.heading_text == first_name)
-        .map(|(s, _)| *s)
+        .map(|(s, p)| (*s, *p))
         .collect();
 
-    // Walk remaining path components
+    // Walk remaining path components, threading parent info
     for &component in &components[1..] {
         let mut next_candidates = Vec::new();
-        for candidate in &candidates {
+        for (candidate, _) in &candidates {
             for child in &candidate.children {
                 if child.heading_text == component {
-                    next_candidates.push(child);
+                    next_candidates.push((child, Some(*candidate)));
                 }
             }
         }
@@ -105,19 +102,12 @@ fn resolve_by_path<'a>(
     }
 
     match candidates.len() {
-        1 => Ok(ResolvedSection::Found(candidates[0])),
+        1 => Ok(ResolvedSection::Found(candidates[0].0)),
         0 => Err(not_found_error(doc, query)),
         _ => {
-            // Build matches with parent info for error
             let match_refs: Vec<SectionRef> = candidates
                 .iter()
-                .map(|s| {
-                    let parent = all
-                        .iter()
-                        .find(|(sec, _)| std::ptr::eq(*sec, *s))
-                        .and_then(|(_, p)| *p);
-                    section_to_ref(s, parent)
-                })
+                .map(|(s, p)| section_to_ref(s, *p))
                 .collect();
             Err(MdeditError::AmbiguousMatch {
                 query: query.to_string(),
