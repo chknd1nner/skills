@@ -82,3 +82,38 @@ fn insert_requires_after_or_before() {
         .failure(); // clap should enforce this
     drop(dir);
 }
+
+#[test]
+fn insert_after_preamble() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\nPreamble text.\n\n## First\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["insert", file.to_str().unwrap(),
+                "--after", "_preamble", "--heading", "## New Section", "--content", "New content."])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("INSERTED"));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    let preamble_pos = result.find("Preamble text.").unwrap();
+    let new_pos = result.find("## New Section").unwrap();
+    let first_pos = result.find("## First").unwrap();
+    assert!(preamble_pos < new_pos);
+    assert!(new_pos < first_pos);
+    drop(dir);
+}
+
+#[test]
+fn insert_before_preamble_is_invalid() {
+    let (dir, file) = common::temp_md_file(
+        "Preamble.\n\n## Section\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["insert", file.to_str().unwrap(),
+                "--before", "_preamble", "--heading", "## New"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not valid"));
+    drop(dir);
+}

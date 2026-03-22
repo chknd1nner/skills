@@ -116,14 +116,17 @@ pub fn run(
     }
     output.push_str(&format!("\n\u{2192} {}\n", full_heading));
     if let Some(ref c) = section_content {
-        for line in c.lines().take(3) {
-            if !line.trim().is_empty() {
-                output.push_str(&format!("  {}\n", line));
-            }
+        let non_empty: Vec<&str> = c.lines().filter(|l| !l.trim().is_empty()).collect();
+        if let Some(first) = non_empty.first() {
+            output.push_str(&format!("  {}\n", first));
         }
-        let total_lines = c.lines().filter(|l| !l.trim().is_empty()).count();
-        if total_lines > 3 {
-            output.push_str(&format!("  [{} more lines]\n", total_lines - 3));
+        if non_empty.len() > 2 {
+            output.push_str(&format!("  [{} more lines]\n", non_empty.len() - 2));
+            if let Some(last) = non_empty.last() {
+                output.push_str(&format!("  {}\n", last));
+            }
+        } else if non_empty.len() == 2 {
+            output.push_str(&format!("  {}\n", non_empty[1]));
         }
     }
 

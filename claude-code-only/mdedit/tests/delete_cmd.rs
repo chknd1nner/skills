@@ -66,3 +66,33 @@ fn delete_dry_run() {
     assert!(result.contains("Content.")); // not deleted
     drop(dir);
 }
+
+#[test]
+fn delete_preamble() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\nPreamble text here.\n\n## Section\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["delete", file.to_str().unwrap(), "_preamble"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("DELETED"));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(!result.contains("Preamble text here."));
+    assert!(result.contains("## Section")); // sections preserved
+    drop(dir);
+}
+
+#[test]
+fn delete_empty_preamble_is_noop() {
+    let (dir, file) = common::temp_md_file(
+        "## Section\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["delete", file.to_str().unwrap(), "_preamble"])
+        .assert()
+        .failure()
+        .code(10); // NoOp exit code
+    drop(dir);
+}
