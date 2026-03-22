@@ -62,23 +62,21 @@ pub fn run(file: &str) -> Result<(), MdeditError> {
         let _ = own_words; // suppress unused warning
     }
 
-    // Check 3: Duplicate heading text (regardless of level — same text is ambiguous for LLMs)
-    // For each section, check if any earlier section has the same heading_text
+    // Check 3: Duplicate heading text at the same level (ambiguity risk for addressing)
     let mut seen: Vec<(u8, &str, usize)> = Vec::new();
-    let mut reported_dupes: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut reported_dupes: std::collections::HashSet<(u8, String)> = std::collections::HashSet::new();
 
     for &(level, text, line) in &flat {
-        if let Some(&(prev_level, _, prev_line)) = seen.iter().find(|&&(_, t, _)| t == text) {
-            let key = text.to_string();
+        if let Some(&(_, _, prev_line)) = seen.iter().find(|&&(l, t, _)| l == level && t == text) {
+            let key = (level, text.to_string());
             if !reported_dupes.contains(&key) {
                 issues.push(ValidationIssue {
                     severity: Severity::Info,
                     line,
                     message: format!(
-                        "Duplicate heading text \"{}\" (also at line {} as H{})",
+                        "Duplicate heading text \"{}\" (also at line {})",
                         format!("{} {}", "#".repeat(level as usize), text),
                         prev_line,
-                        prev_level,
                     ),
                 });
                 reported_dupes.insert(key);
@@ -117,35 +115,23 @@ pub fn run(file: &str) -> Result<(), MdeditError> {
         .unwrap_or(file);
     let issue_word = if issues.len() == 1 { "issue" } else { "issues" };
 
-    if has_warnings {
-        // Return as ValidationFailures error so main.rs exits with code 5
-        // But we need to print to stdout first — the error Display goes to stderr in main.
-        // Per spec: output goes to stdout with INVALID: prefix.
-        // We must print to stdout here, then signal via exit code.
-        // The error handler in main.rs will eprintln! the error, but we also print here.
-        // Actually: let's print to stdout and return the error to get exit code 5.
-        println!("INVALID: {} — {} {}", filename, issues.len(), issue_word);
-        println!();
-        for issue in &issues {
-            let marker = match issue.severity {
-                Severity::Warning => "⚠",
-                Severity::Info => "ℹ",
-            };
-            println!("  {} Line {}: {}", marker, issue.line, issue.message);
-        }
-        // Return validation error to get exit code 5 (main.rs will also eprintln!, that's ok)
-        Err(MdeditError::ValidationFailures(issues))
-    } else {
-        // Info-only: print to stdout and exit 0
-        println!("INVALID: {} — {} {}", filename, issues.len(), issue_word);
-        println!();
-        for issue in &issues {
-            let marker = match issue.severity {
-                Severity::Warning => "⚠",
-                Severity::Info => "ℹ",
-            };
-            println!("  {} Line {}: {}", marker, issue.line, issue.message);
-        }
-        Ok(())
+    // Print issues to stdout
+    println!("INVALID: {} — {} {}", filename, issues.len(), issue_word);
+    println!();
+    for issue in &issues {
+        let marker = match issue.severity {
+            Severity::Warning => "⚠",
+            Severity::Info => "ℹ",
+        };
+        println!("  {} Line {}: {}", marker, issue.line, issue.message);
     }
+
+    if has_warnings {
+        // Exit directly — output already printed to stdout, don't let main.rs
+        // re-print via MdeditError::Display to stderr
+        std::process::exit(5);
+    }
+
+    // Info-only: exit 0
+    Ok(())
 }

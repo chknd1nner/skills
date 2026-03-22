@@ -76,7 +76,7 @@ fn print_stats_section(
     };
 
     if is_top_level && total_words > 0 {
-        let pct = (words * 100) / total_words;
+        let pct = ((words as f64 / total_words as f64) * 100.0).round() as usize;
         println!("{}{} — {} words ({}%){}", indent, heading, words, pct, annotation);
     } else if is_top_level {
         println!("{}{} — {} words{}", indent, heading, words, annotation);
