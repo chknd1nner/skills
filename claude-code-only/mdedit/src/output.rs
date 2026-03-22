@@ -22,10 +22,11 @@ pub fn format_section_preview(doc: &Document, section: &Section) -> String {
     let lines: Vec<&str> = content.lines().collect();
 
     let mut out = format!("  {}\n", section.full_heading());
-    if let Some(first) = lines.iter().find(|l| !l.is_empty()) {
+    let non_empty: Vec<&str> = lines.into_iter().filter(|l| !l.is_empty()).collect();
+    if let Some(first) = non_empty.first() {
         out.push_str(&format!("  {}\n", first));
     }
-    let remaining = if lines.len() > 1 { lines.len() - 1 } else { 0 };
+    let remaining = if non_empty.len() > 1 { non_empty.len() - 1 } else { 0 };
     if remaining > 0 {
         out.push_str(&format!("  [{} more lines]\n", remaining));
     }
