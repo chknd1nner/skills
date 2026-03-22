@@ -54,11 +54,8 @@ enum Commands {
     },
     /// Read/write YAML frontmatter
     Frontmatter {
-        /// File to operate on
-        file: String,
-        /// Subcommand: get, set, or delete (omit to show all fields)
         #[command(subcommand)]
-        action: Option<FrontmatterAction>,
+        action: FrontmatterAction,
     },
     /// Substitute section content
     Replace {
@@ -130,12 +127,18 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum FrontmatterAction {
-    /// Get a frontmatter field value
+    /// Show all frontmatter fields
+    Show {
+        file: String,
+    },
+    /// Get a specific frontmatter field value
     Get {
+        file: String,
         key: String,
     },
     /// Set a frontmatter field value
     Set {
+        file: String,
         key: String,
         value: String,
         #[arg(long)]
@@ -143,6 +146,7 @@ enum FrontmatterAction {
     },
     /// Delete a frontmatter field
     Delete {
+        file: String,
         key: String,
         #[arg(long)]
         dry_run: bool,
@@ -168,6 +172,20 @@ fn main() {
         Commands::Validate { file } => {
             commands::validate::run(&file)
         }
+        Commands::Frontmatter { action } => match action {
+            FrontmatterAction::Show { file } => {
+                commands::frontmatter::run_show(&file)
+            }
+            FrontmatterAction::Get { file, key } => {
+                commands::frontmatter::run_get(&file, &key)
+            }
+            FrontmatterAction::Set { file, key, value, dry_run } => {
+                commands::frontmatter::run_set(&file, &key, &value, dry_run)
+            }
+            FrontmatterAction::Delete { file, key, dry_run } => {
+                commands::frontmatter::run_delete(&file, &key, dry_run)
+            }
+        },
         _ => {
             eprintln!("Command not yet implemented");
             process::exit(1);
