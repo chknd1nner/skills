@@ -50,6 +50,35 @@ pub fn run(file: &str, section_query: &str, dry_run: bool) -> Result<(), MdeditE
                     action_label, words
                 ));
 
+                // Neighborhood context for preamble delete
+                output.push('\n');
+
+                // Deleted preamble with ✗ marker
+                output.push_str("\u{2717} _preamble (deleted)\n");
+                let preamble_text = preamble_content.trim();
+                let preamble_lines: Vec<&str> = preamble_text.lines().filter(|l| !l.trim().is_empty()).collect();
+                if !preamble_lines.is_empty() {
+                    if let Some(first) = preamble_lines.first() {
+                        output.push_str(&format!("  Was: \"{}\"\n", first));
+                    }
+                    if preamble_lines.len() > 2 {
+                        output.push_str(&format!("  [{} more lines]\n", preamble_lines.len() - 2));
+                        if let Some(last) = preamble_lines.last() {
+                            output.push_str(&format!("  Was: \"{}\"\n", last));
+                        }
+                    } else if preamble_lines.len() == 2 {
+                        output.push_str(&format!("  Was: \"{}\"\n", preamble_lines[1]));
+                    }
+                }
+
+                // Next section context (first heading after preamble)
+                output.push('\n');
+                if let Some(first_section) = doc.sections.first() {
+                    output.push_str(&format_section_preview(&doc, first_section));
+                } else {
+                    output.push_str("  [end of document]\n");
+                }
+
                 if dry_run {
                     print!("{}", output);
                     return Ok(());

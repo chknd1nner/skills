@@ -92,7 +92,7 @@ pub fn run(
     if let Some(anchor_lvl) = anchor_level {
         if new_level != anchor_lvl {
             warnings.push(format!(
-                "Level mismatch: inserting H{} next to H{} section",
+                "Inserting H{} next to H{} section \u{2014} heading level mismatch",
                 new_level, anchor_lvl
             ));
         }

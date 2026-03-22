@@ -94,29 +94,22 @@ pub fn run(
         output.push('\n');
     }
 
-    // Target section with → marker — show combined content
-    let new_lines: Vec<&str> = combined_content.lines().collect();
-    let non_empty_new: Vec<&str> = new_lines.iter()
-        .copied()
-        .filter(|l| !l.trim().is_empty())
-        .collect();
-
+    // Target section with → marker
     output.push_str(&format!("\u{2192} {}\n", section.full_heading()));
-    if let Some(first) = non_empty_new.first() {
+
+    // Prepended lines with + prefix (right after heading)
+    for line in prepend_content_raw.lines() {
+        output.push_str(&format!("+ {}\n", line));
+    }
+
+    // Show head of existing content
+    let existing_text = doc.slice(&section.own_content_range).trim();
+    let existing_non_empty: Vec<&str> = existing_text.lines().filter(|l| !l.trim().is_empty()).collect();
+    if let Some(first) = existing_non_empty.first() {
         output.push_str(&format!("  {}\n", first));
     }
-    let remaining = if non_empty_new.len() > 1 { non_empty_new.len() - 1 } else { 0 };
-    if remaining > 1 {
-        output.push_str(&format!("  [{} more lines]\n", remaining - 1));
-        if let Some(last) = non_empty_new.last() {
-            if non_empty_new.len() > 1 {
-                output.push_str(&format!("  {}\n", last));
-            }
-        }
-    } else if remaining == 1 {
-        if let Some(last) = non_empty_new.last() {
-            output.push_str(&format!("  {}\n", last));
-        }
+    if existing_non_empty.len() > 1 {
+        output.push_str(&format!("  [{} more lines]\n", existing_non_empty.len() - 1));
     }
 
     // Next section
@@ -125,11 +118,6 @@ pub fn run(
         output.push_str(&format_section_preview(&doc, next));
     } else {
         output.push_str("  [end of document]\n");
-    }
-
-    // Diff-like output showing prepended lines with + prefix
-    for line in prepend_content_raw.lines() {
-        output.push_str(&format!("+ {}\n", line));
     }
 
     if dry_run {
