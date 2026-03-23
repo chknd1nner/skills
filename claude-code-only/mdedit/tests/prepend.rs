@@ -127,3 +127,81 @@ fn prepend_multiline_content() {
     assert!(multiline_pos < existing_pos);
     drop(dir);
 }
+
+#[test]
+fn prepend_to_preamble_existing() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\nExisting preamble.\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["prepend", file.to_str().unwrap(), "_preamble", "--content", "Prepended line."])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("PREPENDED"))
+        .stdout(predicate::str::contains("_preamble"))
+        .stdout(predicate::str::contains("+ Prepended line."));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("Prepended line."));
+    assert!(result.contains("Existing preamble."));
+    let prepended_pos = result.find("Prepended line.").unwrap();
+    let existing_pos = result.find("Existing preamble.").unwrap();
+    let heading_pos = result.find("# Heading").unwrap();
+    assert!(prepended_pos < existing_pos);
+    assert!(existing_pos < heading_pos);
+    drop(dir);
+}
+
+#[test]
+fn prepend_to_preamble_creates_when_absent() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["prepend", file.to_str().unwrap(), "_preamble", "--content", "New preamble."])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("PREPENDED"));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("New preamble."));
+    let preamble_pos = result.find("New preamble.").unwrap();
+    let heading_pos = result.find("# Heading").unwrap();
+    assert!(preamble_pos < heading_pos);
+    drop(dir);
+}
+
+#[test]
+fn prepend_to_preamble_dry_run() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\nExisting.\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["prepend", file.to_str().unwrap(), "_preamble", "--content", "New.", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("DRY RUN"));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(!result.contains("New.")); // file unchanged
+    drop(dir);
+}
+
+#[test]
+fn prepend_to_preamble_no_frontmatter() {
+    let (dir, file) = common::temp_md_file(
+        "Existing preamble.\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["prepend", file.to_str().unwrap(), "_preamble", "--content", "Prepended."])
+        .assert()
+        .success();
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("Prepended."));
+    assert!(result.contains("Existing preamble."));
+    let prepended_pos = result.find("Prepended.").unwrap();
+    let existing_pos = result.find("Existing preamble.").unwrap();
+    assert!(prepended_pos < existing_pos);
+    drop(dir);
+}

@@ -33,9 +33,89 @@ pub fn run(
     let section = match resolved {
         ResolvedSection::Found(s) => s,
         ResolvedSection::Preamble => {
-            return Err(MdeditError::InvalidOperation(
-                "prepend does not yet support _preamble".to_string(),
+            // Prepend to preamble content
+            let preamble_range = doc.preamble_write_range();
+            let existing_content = &source[preamble_range.clone()];
+
+            // Resolve new content
+            let prepend_content_raw = resolve_content(content, from_file)?;
+            let prepend_content_with_newline = format!(
+                "{}{}",
+                prepend_content_raw,
+                if prepend_content_raw.ends_with('\n') { "" } else { "\n" }
+            );
+
+            // Whitespace: prepend \n only when creating preamble after frontmatter
+            let splice_content = if doc.frontmatter.is_some() && doc.preamble.is_none() {
+                format!("\n{}", prepend_content_with_newline)
+            } else {
+                prepend_content_with_newline.clone()
+            };
+
+            // Metrics
+            let existing_lines = existing_content.trim().lines().count();
+            let prepended_lines = prepend_content_raw.lines().count();
+            let combined = format!("{}{}", prepend_content_with_newline, existing_content);
+            let combined_lines = combined.trim().lines().count();
+
+            // Build output
+            let action_label = if dry_run { "WOULD PREPEND" } else { "PREPENDED" };
+            let mut output = String::new();
+            if dry_run {
+                output.push_str("DRY RUN \u{2014} no changes written\n\n");
+            }
+            output.push_str(&format!(
+                "{}: {} lines to \"_preamble\" (was {} lines \u{2192} now {} lines)\n",
+                action_label, prepended_lines, existing_lines, combined_lines
             ));
+
+            output.push('\n');
+
+            // Target with → marker
+            output.push_str("\u{2192} _preamble\n");
+
+            // Prepended lines with + prefix
+            for line in prepend_content_raw.lines() {
+                output.push_str(&format!("+ {}\n", line));
+            }
+
+            // Head of existing content (if any)
+            let existing_text = existing_content.trim();
+            let existing_non_empty: Vec<&str> = existing_text.lines()
+                .filter(|l| !l.trim().is_empty()).collect();
+            if let Some(first) = existing_non_empty.first() {
+                output.push_str(&format!("  {}\n", first));
+            }
+            if existing_non_empty.len() > 1 {
+                output.push_str(&format!("  [{} more lines]\n", existing_non_empty.len() - 1));
+            }
+
+            // Next section context
+            output.push('\n');
+            if let Some(first_section) = doc.sections.first() {
+                output.push_str(&format_section_preview(&doc, first_section));
+            } else {
+                output.push_str("  [end of document]\n");
+            }
+
+            if dry_run {
+                print!("{}", output);
+                return Ok(());
+            }
+
+            // Splice at preamble_range.start
+            let new_source = format!(
+                "{}{}{}",
+                &source[..preamble_range.start],
+                splice_content,
+                &source[preamble_range.start..]
+            );
+            let normalised = normalise(&new_source);
+            std::fs::write(file, &normalised)
+                .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", file, e)))?;
+
+            print!("{}", output);
+            return Ok(());
         }
     };
 

@@ -54,8 +54,10 @@ enum Commands {
     },
     /// Read/write YAML frontmatter
     Frontmatter {
+        /// File path (used when no subcommand given, defaults to show)
+        file: Option<String>,
         #[command(subcommand)]
-        action: FrontmatterAction,
+        action: Option<FrontmatterAction>,
     },
     /// Substitute section content
     Replace {
@@ -172,18 +174,24 @@ fn main() {
         Commands::Validate { file } => {
             commands::validate::run(&file)
         }
-        Commands::Frontmatter { action } => match action {
-            FrontmatterAction::Show { file } => {
+        Commands::Frontmatter { file, action } => match action {
+            Some(FrontmatterAction::Show { file }) => {
                 commands::frontmatter::run_show(&file)
             }
-            FrontmatterAction::Get { file, key } => {
+            Some(FrontmatterAction::Get { file, key }) => {
                 commands::frontmatter::run_get(&file, &key)
             }
-            FrontmatterAction::Set { file, key, value, dry_run } => {
+            Some(FrontmatterAction::Set { file, key, value, dry_run }) => {
                 commands::frontmatter::run_set(&file, &key, &value, dry_run)
             }
-            FrontmatterAction::Delete { file, key, dry_run } => {
+            Some(FrontmatterAction::Delete { file, key, dry_run }) => {
                 commands::frontmatter::run_delete(&file, &key, dry_run)
+            }
+            None => match file {
+                Some(f) => commands::frontmatter::run_show(&f),
+                None => Err(error::MdeditError::InvalidOperation(
+                    "file required: mdedit frontmatter <file>".to_string()
+                )),
             }
         },
         Commands::Replace { file, section, content, from_file, preserve_children, dry_run } => {

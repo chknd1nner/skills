@@ -86,3 +86,31 @@ fn frontmatter_set_dry_run() {
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("Old"));
 }
+
+#[test]
+fn frontmatter_bare_invocation() {
+    // mdedit frontmatter doc.md should behave like mdedit frontmatter show doc.md
+    let show_output = Command::cargo_bin("mdedit").unwrap()
+        .args(&["frontmatter", "show", &common::fixture_path_str("with_frontmatter.md")])
+        .output()
+        .unwrap();
+
+    let bare_output = Command::cargo_bin("mdedit").unwrap()
+        .args(&["frontmatter", &common::fixture_path_str("with_frontmatter.md")])
+        .output()
+        .unwrap();
+
+    assert!(bare_output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&show_output.stdout),
+        String::from_utf8_lossy(&bare_output.stdout)
+    );
+}
+
+#[test]
+fn frontmatter_bare_no_file_errors() {
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["frontmatter"])
+        .assert()
+        .failure();
+}
