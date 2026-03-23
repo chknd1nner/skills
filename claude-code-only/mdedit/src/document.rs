@@ -64,6 +64,65 @@ impl Document {
     pub fn byte_to_line(&self, byte: usize) -> usize {
         self.source[..byte].matches('\n').count() + 1
     }
+
+    /// Returns the byte range for preamble content, for write operations.
+    /// - If preamble exists: returns its range
+    /// - If no preamble exists: returns an empty range at the insertion point
+    ///   (after frontmatter end, or byte 0 if no frontmatter)
+    pub fn preamble_write_range(&self) -> Range<usize> {
+        if let Some(ref range) = self.preamble {
+            range.clone()
+        } else {
+            let point = self.frontmatter.as_ref()
+                .map(|fm| fm.end)
+                .unwrap_or(0);
+            point..point
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preamble_write_range_with_preamble() {
+        let doc = Document {
+            source: "---\ntitle: x\n---\n\nPreamble text.\n\n# Heading\n".to_string(),
+            frontmatter: Some(0..17),
+            preamble: Some(18..33),
+            sections: vec![],
+        };
+        assert_eq!(doc.preamble_write_range(), 18..33);
+    }
+
+    #[test]
+    fn preamble_write_range_no_preamble_with_frontmatter() {
+        let doc = Document {
+            source: "---\ntitle: x\n---\n\n# Heading\n".to_string(),
+            frontmatter: Some(0..17),
+            preamble: None,
+            sections: vec![],
+        };
+        let range = doc.preamble_write_range();
+        assert_eq!(range.start, 17);
+        assert_eq!(range.end, 17);
+        assert!(range.is_empty());
+    }
+
+    #[test]
+    fn preamble_write_range_no_preamble_no_frontmatter() {
+        let doc = Document {
+            source: "# Heading\n".to_string(),
+            frontmatter: None,
+            preamble: None,
+            sections: vec![],
+        };
+        let range = doc.preamble_write_range();
+        assert_eq!(range.start, 0);
+        assert_eq!(range.end, 0);
+        assert!(range.is_empty());
+    }
 }
 
 impl Section {
