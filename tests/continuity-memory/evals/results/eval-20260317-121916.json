@@ -1,0 +1,155 @@
+{
+  "run_id": "20260317-121916",
+  "timestamp": "2026-03-17T12:20:17",
+  "total": 4,
+  "passed": 4,
+  "failed": 0,
+  "results": [
+    {
+      "eval_id": 34,
+      "name": "section-tool-add-position",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "ba1240ec-ae67-4e49-9a5a-e4e89fcc8833",
+      "duration_s": 61.752482891082764,
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\nmemory.fetch('s..."
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\nmemory.fetch('s..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 35,
+      "name": "section-tool-replace-profile",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "4c932cbc-d9cf-4406-92c1-a8f0cd2aba91",
+      "duration_s": 20.226728916168213,
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update the cur..."
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update the cur..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 36,
+      "name": "section-tool-remove-question",
+      "persona": "any",
+      "passed": true,
+      "error": "",
+      "session_id": "a7796c84-ef7c-46e8-b09d-58bd897be971",
+      "duration_s": 34.18767786026001,
+      "assertions": [
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch and re..."
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch and re..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 37,
+      "name": "section-tool-update-entity",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "46a29204-073f-453b-bbdf-fe6077e106a5",
+      "duration_s": 23.26333999633789,
+      "assertions": [
+        {
+          "id": "entity-fetch-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update dad ent..."
+        },
+        {
+          "id": "section-tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update dad ent..."
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update dad ent..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    }
+  ]
+}

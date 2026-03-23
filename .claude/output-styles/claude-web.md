@@ -1,7 +1,6 @@
 ---
 name: Claude.ai Web Conversational Style
 description: Match the tone and style of the claude.ai web interface
-keep-coding-instructions: true
 ---
 
 <claude_behavior>

@@ -1,0 +1,762 @@
+{
+  "run_id": "20260317-122030",
+  "timestamp": "2026-03-17T12:23:19",
+  "total": 33,
+  "passed": 31,
+  "failed": 2,
+  "results": [
+    {
+      "eval_id": 1,
+      "name": "companion-emotional-share",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "3a3c5040-96f8-4cd7-800b-74f6de415b14",
+      "duration_s": 19.827785968780518,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch the curr..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 2,
+      "name": "companion-vulnerability-share",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "9352acfa-ece9-4417-9a51-d82527277506",
+      "duration_s": 24.556431770324707,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch and upda..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 3,
+      "name": "companion-relationship-dynamic",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "bd7c43d4-fdf3-4ebf-9794-63a0b5307634",
+      "duration_s": 30.90719199180603,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update the d..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 4,
+      "name": "fitness-client-goals",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "4efd9e55-1565-4877-abc7-d1c41529f6ac",
+      "duration_s": 27.40554690361023,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update collabo..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 5,
+      "name": "fitness-client-physical-state",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "54f2bf1f-bfba-4ecc-9896-4f11b60efd10",
+      "duration_s": 24.707309007644653,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update collabo..."
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 6,
+      "name": "fitness-motivation-and-context",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "6dd67a38-76bd-4102-8c80-b22e1ff44760",
+      "duration_s": 23.629106760025024,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update collabo..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 7,
+      "name": "creative-writing-preference",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "21597cb1-a9e1-4ae7-b210-dad4035b231c",
+      "duration_s": 20.440420150756836,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update collabo..."
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 8,
+      "name": "dev-work-preference",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "db4b61de-d77c-4bce-a6a1-b8d338eb0f39",
+      "duration_s": 19.01758599281311,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch the prof..."
+        },
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 9,
+      "name": "dev-communication-preference",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "dd84e524-8d01-4210-bbb7-e4f9dd1dfd59",
+      "duration_s": 16.762372255325317,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update collabo..."
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 10,
+      "name": "companion-light-chitchat",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "99d83720-023d-4e7a-8b2a-6e611ebbe3d7",
+      "duration_s": 10.753729104995728,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 11,
+      "name": "fitness-factual-question",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "d512baae-08be-4121-ad90-6d08d9c1049c",
+      "duration_s": 16.16715908050537,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 12,
+      "name": "creative-generic-question",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "9cefd202-b51a-41ef-9dbe-5956160d378a",
+      "duration_s": 12.928044080734253,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 13,
+      "name": "dev-factual-question",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "6a2fb806-1fe5-4335-afcb-3540419fdd24",
+      "duration_s": 8.606157064437866,
+      "assertions": [
+        {
+          "id": "no-draft-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 14,
+      "name": "companion-goodnight-exit",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "5e9d0fab-9f6f-450e-904f-41305aab31e2",
+      "duration_s": 21.29513692855835,
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Alex just land..."
+        },
+        {
+          "id": "thinking-recognizes-exit",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 15,
+      "name": "fitness-plan-resolution",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "d10b1475-425c-404b-9cbd-e27f9dca7c2f",
+      "duration_s": 30.957977056503296,
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Consolidate ..."
+        },
+        {
+          "id": "thinking-recognizes-resolution",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 16,
+      "name": "creative-chapter-decision",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "26f74c12-0a3c-45f3-a3d3-ec1f9dcc9d4c",
+      "duration_s": 30.984699726104736,
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Create entit..."
+        },
+        {
+          "id": "thinking-recognizes-resolution",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 17,
+      "name": "dev-pivot-to-new-topic",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "7655f688-16ca-4430-9968-60a80a2e435c",
+      "duration_s": 57.344606161117554,
+      "assertions": [
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch the cu..."
+        },
+        {
+          "id": "thinking-recognizes-pivot",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "no-memory-narration",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 18,
+      "name": "companion-still-processing",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "deeeb324-5168-458f-9fe9-53a4079a2d9a",
+      "duration_s": 26.35284924507141,
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 19,
+      "name": "fitness-exploring-options",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "f01c8ef0-4872-4e95-8eb7-2cf5106dc144",
+      "duration_s": 30.083771228790283,
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 20,
+      "name": "creative-mid-revision",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "66f979e4-7dfd-4cc2-9442-1e87600c43c9",
+      "duration_s": 26.504571199417114,
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        }
+      ]
+    },
+    {
+      "eval_id": 21,
+      "name": "dev-parked-topic",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "32f33e2c-ecf2-4418-802e-8140054ccb1b",
+      "duration_s": 23.269434928894043,
+      "assertions": [
+        {
+          "id": "no-consolidation-fires",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        },
+        {
+          "id": "thinking-recognizes-hanging",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 22,
+      "name": "self-position-forming",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "15a43445-ef69-4327-a77f-a89f57958550",
+      "duration_s": 26.44908118247986,
+      "assertions": [
+        {
+          "id": "self-position-draft",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Add new posi..."
+        },
+        {
+          "id": "thinking-recognizes-position",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 23,
+      "name": "entity-recurring-person-dev",
+      "persona": "dev",
+      "passed": true,
+      "error": "",
+      "session_id": "90206960-34bd-4d33-9c35-342f9732933c",
+      "duration_s": 21.07698702812195,
+      "assertions": [
+        {
+          "id": "entity-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Create Sarah e..."
+        },
+        {
+          "id": "thinking-considers-entity",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 24,
+      "name": "entity-recurring-person-companion",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "e2c593e8-4d72-4a90-a549-579751f2e248",
+      "duration_s": 27.07320284843445,
+      "assertions": [
+        {
+          "id": "entity-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Create Kai ent..."
+        },
+        {
+          "id": "thinking-considers-entity",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 25,
+      "name": "divergence-companion-draft",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "2a4d9b95-29ae-441c-acd5-2a6369374911",
+      "duration_s": 27.689903736114502,
+      "assertions": [
+        {
+          "id": "thinking-recognizes",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch the curr..."
+        }
+      ]
+    },
+    {
+      "eval_id": 26,
+      "name": "divergence-fitness-consolidation",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "1997f3f7-4cf3-4b9d-97c0-90f277948cbc",
+      "duration_s": 29.707282066345215,
+      "assertions": [
+        {
+          "id": "thinking-recognizes-close",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        },
+        {
+          "id": "tool-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch curren..."
+        }
+      ]
+    },
+    {
+      "eval_id": 27,
+      "name": "no-narration-companion-context",
+      "persona": "companion",
+      "passed": true,
+      "error": "",
+      "session_id": "47de33d5-3dd8-463e-bab2-bfd7157e4b00",
+      "duration_s": 24.964643955230713,
+      "assertions": [
+        {
+          "id": "no-memory-checking-phrases",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        },
+        {
+          "id": "no-loading-phrases",
+          "type": "text_absent",
+          "passed": true,
+          "detail": "Pattern absent from output"
+        }
+      ]
+    },
+    {
+      "eval_id": 28,
+      "name": "session-start-connect",
+      "persona": "any",
+      "passed": true,
+      "error": "",
+      "session_id": "d457b20a-d537-49fb-bc59-c6058d04dc33",
+      "duration_s": 15.128747940063477,
+      "assertions": [
+        {
+          "id": "connect-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\ninfo = memory.sta..."
+        }
+      ]
+    },
+    {
+      "eval_id": 29,
+      "name": "compound-fitness-insight-and-exit",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "bbc22d53-e98e-45b7-9049-1f083b728575",
+      "duration_s": 22.541074752807617,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Draft: Update ..."
+        },
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Draft: Update ..."
+        }
+      ]
+    },
+    {
+      "eval_id": 30,
+      "name": "compound-companion-share-and-pivot",
+      "persona": "companion",
+      "passed": false,
+      "error": "",
+      "session_id": "c2cc76c9-25a7-4f05-9ed6-1280564d3870",
+      "duration_s": 35.13011193275452,
+      "assertions": [
+        {
+          "id": "draft-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update the p..."
+        },
+        {
+          "id": "consolidation-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.consolidate/"
+        },
+        {
+          "id": "thinking-handles-both",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 31,
+      "name": "fetch-entity-for-context",
+      "persona": "companion",
+      "passed": false,
+      "error": "",
+      "session_id": "edcd18b8-7ff4-4e8a-a34c-1601018bd0b5",
+      "duration_s": 22.132366180419922,
+      "assertions": [
+        {
+          "id": "entity-fetch-fires",
+          "type": "tool_called",
+          "passed": false,
+          "detail": "No Bash call matching /memory\\.fetch/"
+        },
+        {
+          "id": "thinking-considers-entity-lookup",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 32,
+      "name": "fetch-entity-for-update",
+      "persona": "creative",
+      "passed": true,
+      "error": "",
+      "session_id": "e125a447-1232-42ab-977c-7cf7dac92090",
+      "duration_s": 25.779678106307983,
+      "assertions": [
+        {
+          "id": "entity-update-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch the no...; Bash command matches: ...python3 << 'PYEOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Update the c..."
+        },
+        {
+          "id": "thinking-recognizes-entity-update",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    },
+    {
+      "eval_id": 33,
+      "name": "no-redundant-fetch-preinjected",
+      "persona": "fitness",
+      "passed": true,
+      "error": "",
+      "session_id": "322083e6-7d96-4781-a5ab-cae5de1b4515",
+      "duration_s": 28.02466607093811,
+      "assertions": [
+        {
+          "id": "no-content-fetch-preinjected",
+          "type": "tool_not_called",
+          "passed": true,
+          "detail": "No matching call found"
+        },
+        {
+          "id": "commit-fires",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch the prof..."
+        },
+        {
+          "id": "commit-from-file",
+          "type": "tool_called",
+          "passed": true,
+          "detail": "Bash command matches: ...python3 << 'EOF'\nimport sys\nsys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/tests/continuity-memory/evals')\nfrom mock_memory_system import connect\n\nmemory = connect()\n\n# Fetch the prof..."
+        },
+        {
+          "id": "thinking-recognizes-update",
+          "type": "thinking_contains",
+          "passed": true,
+          "detail": "Pattern found in thinking"
+        }
+      ]
+    }
+  ]
+}
