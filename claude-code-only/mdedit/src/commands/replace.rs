@@ -2,7 +2,7 @@ use crate::addressing::{resolve, ResolvedSection};
 use crate::content::resolve_content;
 use crate::counting::word_count;
 use crate::error::MdeditError;
-use crate::output::format_neighborhood;
+use crate::output::{format_neighborhood, format_section_preview};
 use crate::parser;
 use crate::whitespace::normalise;
 
@@ -35,9 +35,111 @@ pub fn run(
     let section = match resolved {
         ResolvedSection::Found(s) => s,
         ResolvedSection::Preamble => {
-            return Err(MdeditError::InvalidOperation(
-                "replace does not support _preamble; use a section heading".to_string(),
+            // Replace preamble content
+            let preamble_range = doc.preamble_write_range();
+            let old_content = &source[preamble_range.clone()];
+
+            // Resolve new content
+            let new_content_raw = resolve_content(content, from_file)?;
+
+            // Ensure trailing newline
+            let new_content_with_newline = format!(
+                "{}{}",
+                new_content_raw,
+                if new_content_raw.ends_with('\n') { "" } else { "\n" }
+            );
+
+            // No-op check
+            if old_content.trim() == new_content_raw.trim() {
+                return Err(MdeditError::NoOp(
+                    "Preamble content is identical to replacement".to_string(),
+                ));
+            }
+
+            // Whitespace: prepend \n only when creating preamble after frontmatter
+            let splice_content = if doc.frontmatter.is_some() && doc.preamble.is_none() {
+                format!("\n{}", new_content_with_newline)
+            } else {
+                new_content_with_newline.clone()
+            };
+
+            // Metrics
+            let old_lines = old_content.trim().lines().count();
+            let new_lines = new_content_raw.trim().lines().count();
+            let old_words = word_count(&source, &preamble_range);
+            let new_words = word_count(&new_content_raw, &(0..new_content_raw.len()));
+
+            // Build output
+            let action_label = if dry_run { "WOULD REPLACE" } else { "REPLACED" };
+            let mut output = String::new();
+            if dry_run {
+                output.push_str("DRY RUN \u{2014} no changes written\n\n");
+            }
+            output.push_str(&format!(
+                "{}: \"_preamble\" (was {} lines, {} words \u{2192} now {} lines, {} words)\n",
+                action_label, old_lines, old_words, new_lines, new_words
             ));
+
+            // Warnings
+            if old_lines > 0 && new_lines < old_lines {
+                let reduction_pct = ((old_lines - new_lines) * 100) / old_lines;
+                if reduction_pct > 50 {
+                    output.push_str(&format!(
+                        "\u{26a0} Large reduction: {} lines \u{2192} {} lines\n",
+                        old_lines, new_lines
+                    ));
+                }
+            }
+
+            output.push('\n');
+
+            // Target with → marker
+            output.push_str("\u{2192} _preamble\n");
+            let new_non_empty: Vec<&str> = new_content_raw.lines()
+                .filter(|l| !l.trim().is_empty()).collect();
+            if let Some(first) = new_non_empty.first() {
+                output.push_str(&format!("  {}\n", first));
+            }
+            let remaining = if new_non_empty.len() > 1 { new_non_empty.len() - 1 } else { 0 };
+            if remaining > 1 {
+                output.push_str(&format!("  [{} more lines]\n", remaining - 1));
+                if let Some(last) = new_non_empty.last() {
+                    if new_non_empty.len() > 1 {
+                        output.push_str(&format!("  {}\n", last));
+                    }
+                }
+            } else if remaining == 1 {
+                if let Some(last) = new_non_empty.last() {
+                    output.push_str(&format!("  {}\n", last));
+                }
+            }
+
+            // Next section context
+            output.push('\n');
+            if let Some(first_section) = doc.sections.first() {
+                output.push_str(&format_section_preview(&doc, first_section));
+            } else {
+                output.push_str("  [end of document]\n");
+            }
+
+            if dry_run {
+                print!("{}", output);
+                return Ok(());
+            }
+
+            // Splice
+            let new_source = format!(
+                "{}{}{}",
+                &source[..preamble_range.start],
+                splice_content,
+                &source[preamble_range.end..]
+            );
+            let normalised = normalise(&new_source);
+            std::fs::write(file, &normalised)
+                .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", file, e)))?;
+
+            print!("{}", output);
+            return Ok(());
         }
     };
 

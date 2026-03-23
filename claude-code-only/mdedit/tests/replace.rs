@@ -164,3 +164,124 @@ fn replace_normalises_whitespace() {
     assert!(!result.ends_with("\n\n"));
     drop(dir);
 }
+
+#[test]
+fn replace_preamble_existing() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\nOld preamble.\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["replace", file.to_str().unwrap(), "_preamble", "--content", "New preamble."])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("REPLACED"))
+        .stdout(predicate::str::contains("_preamble"));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("New preamble."));
+    assert!(!result.contains("Old preamble."));
+    assert!(result.contains("# Heading")); // heading preserved
+    assert!(result.contains("Content.")); // section content preserved
+    drop(dir);
+}
+
+#[test]
+fn replace_preamble_creates_when_absent() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["replace", file.to_str().unwrap(), "_preamble", "--content", "Created preamble."])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("REPLACED"));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("Created preamble."));
+    assert!(result.contains("# Heading"));
+    // Preamble should be between frontmatter and heading
+    let preamble_pos = result.find("Created preamble.").unwrap();
+    let heading_pos = result.find("# Heading").unwrap();
+    assert!(preamble_pos < heading_pos);
+    drop(dir);
+}
+
+#[test]
+fn replace_preamble_noop() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\nExisting.\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["replace", file.to_str().unwrap(), "_preamble", "--content", "Existing."])
+        .assert()
+        .code(10)
+        .stdout(predicate::str::contains("NO CHANGE"));
+    drop(dir);
+}
+
+#[test]
+fn replace_preamble_dry_run() {
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\nOld.\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["replace", file.to_str().unwrap(), "_preamble", "--content", "New.", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("DRY RUN"))
+        .stdout(predicate::str::contains("WOULD REPLACE"));
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("Old.")); // file unchanged
+    drop(dir);
+}
+
+#[test]
+fn replace_preamble_no_frontmatter() {
+    let (dir, file) = common::temp_md_file(
+        "Old preamble text.\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["replace", file.to_str().unwrap(), "_preamble", "--content", "New preamble."])
+        .assert()
+        .success();
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("New preamble."));
+    assert!(!result.contains("Old preamble text."));
+    drop(dir);
+}
+
+#[test]
+fn replace_preamble_preserve_children_accepted() {
+    // --preserve-children is accepted but has no effect (preamble has no children)
+    let (dir, file) = common::temp_md_file(
+        "---\ntitle: Test\n---\n\nOld.\n\n# Heading\n\nContent.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["replace", file.to_str().unwrap(), "_preamble",
+                "--content", "New.", "--preserve-children"])
+        .assert()
+        .success();
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("New."));
+    drop(dir);
+}
+
+#[test]
+fn replace_preamble_no_headings_document() {
+    // Document with no headings — preamble is entire content
+    let (dir, file) = common::temp_md_file(
+        "Just some text.\nAnother line.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .args(&["replace", file.to_str().unwrap(), "_preamble", "--content", "Replaced."])
+        .assert()
+        .success();
+
+    let result = std::fs::read_to_string(&file).unwrap();
+    assert!(result.contains("Replaced."));
+    assert!(!result.contains("Just some text."));
+    drop(dir);
+}
