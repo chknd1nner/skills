@@ -22,7 +22,7 @@ Sections are identified by heading text. Addressing syntax:
 
 | Pattern | Meaning |
 |---|---|
-| `Background` | Any heading whose text is "Background" (case-insensitive) |
+| `Background` | Any heading whose text is "Background" (case-sensitive, exact match) |
 | `## Background` | H2 heading with text "Background" (level-qualified) |
 | `Background/Prior Work` | Child section "Prior Work" inside "Background" |
 | `_preamble` | Content before the first heading (after frontmatter) |
