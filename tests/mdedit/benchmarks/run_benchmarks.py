@@ -228,13 +228,12 @@ def _validate_run(task_slug: str, is_workflow: bool, size: str,
             report_text = report_path.read_text()
         else:
             report_text = claude_output_text
-        # Expected content: the replacement text from the prompt
-        expected_file = EXPECTED_DIR / size / f'{task_slug}.md'
-        if expected_file.exists():
-            expected_content = expected_file.read_text()
-        else:
-            # Fall back: look for the replacement text in the prompt
-            expected_content = ''
+        # Expected content: hardcoded from the edit-and-verify prompt
+        expected_content = (
+            "This project addresses the growing need for efficient document processing\n"
+            "in large-scale systems. Previous approaches relied on batch processing,\n"
+            "which introduced unacceptable latency for real-time applications."
+        )
         return validate_edit_and_verify(report_text, expected_content)
 
     else:
