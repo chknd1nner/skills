@@ -16,16 +16,16 @@ set -euo pipefail
 
 INPUT=$(cat)
 
-SUBAGENT_TYPE=$(echo "$INPUT" | jq -r '.tool_input.subagent_type // ""')
-DESCRIPTION=$(echo "$INPUT" | jq -r '.tool_input.description // ""')
-CWD=$(echo "$INPUT" | jq -r '.cwd // ""')
-PROMPT=$(echo "$INPUT" | jq -r '.tool_input.prompt // ""')
+SUBAGENT_TYPE=$(printf "%s\n" "$INPUT" | jq -r '.tool_input.subagent_type // ""')
+DESCRIPTION=$(printf "%s\n" "$INPUT" | jq -r '.tool_input.description // ""')
+CWD=$(printf "%s\n" "$INPUT" | jq -r '.cwd // ""')
+PROMPT=$(printf "%s\n" "$INPUT" | jq -r '.tool_input.prompt // ""')
 
 is_review_call() {
   if [[ "$SUBAGENT_TYPE" == "superpowers:code-reviewer" ]]; then
     return 0
   fi
-  if [[ "$SUBAGENT_TYPE" == "general-purpose" ]] && echo "$DESCRIPTION" | grep -qi "^Review"; then
+  if [[ "$SUBAGENT_TYPE" == "general-purpose" ]] && printf "%s\n" "$DESCRIPTION" | grep -qi "^Review"; then
     return 0
   fi
   return 1
