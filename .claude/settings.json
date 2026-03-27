@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/martinkuek/Documents/Projects/skills/.claude/hooks/intercept-review-agents.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
