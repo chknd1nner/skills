@@ -65,7 +65,7 @@ GEMINI_OUTPUT=$(
 
 **Stdin carries the prompt; `-p` provides the trailing instruction** — together they form the complete request. This pattern is explicitly documented in the Gemini CLI headless reference.
 
-**`--approval-mode yolo`** — auto-approves all tool use, giving Gemini full access to read files, run `git diff`, grep the codebase, and follow threads as needed. Review tasks require this level of autonomy — pre-injecting context would constrain Gemini to what the hook author thought was relevant, which is worse than letting the reviewer decide.
+**`--approval-mode plan`** — read-only mode. Gemini can read files, run `git diff`, grep the codebase, and follow threads as needed, but cannot write files or execute mutating commands. This enforces strict separation of duties: reviewers observe and report, they do not modify. `yolo` was considered but rejected — it allowed Gemini to make unsolicited edits and write files during reviews, which is outside the reviewer role.
 
 **`--include-directories "$CWD"`** — scopes Gemini's filesystem access to the project workspace.
 
