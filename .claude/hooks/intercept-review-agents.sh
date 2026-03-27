@@ -41,12 +41,12 @@ if [[ -n "${GEMINI_REVIEW_MODEL:-}" ]]; then
   MODEL_ARGS=(-m "$GEMINI_REVIEW_MODEL")
 fi
 
-# Run Gemini with full workspace access
+# Run Gemini in read-only mode (plan) — reviews must not write files or make commits
 GEMINI_OUTPUT=$(
   printf "%s\n" "$PROMPT" \
   | gemini \
       -p "Perform the review task described in the input above." \
-      --approval-mode yolo \
+      --approval-mode plan \
       --include-directories "$CWD" \
       -o text \
       "${MODEL_ARGS[@]}" \
