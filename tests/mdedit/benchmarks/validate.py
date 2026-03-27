@@ -195,10 +195,29 @@ def validate_targeted_read(report_text: str, fixture_file: Path, section_name: s
     normalized_section = normalize_whitespace(section_content).rstrip('\n')
     normalized_report = normalize_whitespace(report_text).rstrip('\n')
 
+    # First try: full section including heading
     if normalized_section in normalized_report:
         return {
             'valid': True,
             'reason': f'Section "{section_name}" found in report',
+            'diff': ''
+        }
+
+    # Second try: content only, without the heading line.
+    # Agents asked to "return only the content" often omit the markdown heading.
+    heading_pattern = re.compile(r'^#{1,6}\s+')
+    content_lines = [l for l in section_content.split('\n')
+                     if not heading_pattern.match(l)]
+    # Strip leading blank lines left after removing the heading
+    while content_lines and not content_lines[0].strip():
+        content_lines.pop(0)
+    content_without_heading = '\n'.join(content_lines)
+    normalized_content = normalize_whitespace(content_without_heading).rstrip('\n')
+
+    if normalized_content and normalized_content in normalized_report:
+        return {
+            'valid': True,
+            'reason': f'Section "{section_name}" content found in report (heading omitted)',
             'diff': ''
         }
 

@@ -55,7 +55,7 @@ TASKS = [
     ('delete-section',       'Delete a section',                    False, []),
     ('rename-heading',       'Rename a heading',                    False, []),
     ('multi-section-update', 'Multi-section update (3 edits)',      False, []),
-    ('targeted-read',        'Targeted read (single section)',      True,  []),
+    ('targeted-read',        'Targeted read (single section)',      False, []),
     ('build-toc',            'Build + prepend table of contents',   True,  []),
     ('edit-and-verify',      'Edit and verify (self-confirming)',   True,  []),
 ]
@@ -212,13 +212,10 @@ def _validate_run(task_slug: str, is_workflow: bool, size: str,
     result_file = workdir / fixture_name
 
     if task_slug == 'targeted-read':
-        # Get report text: prefer written report file, fall back to claude output
-        if report_path.exists():
-            report_text = report_path.read_text()
-        else:
-            report_text = claude_output_text
-        fixture_file = FIXTURES_DIR / fixture_name
-        return validate_targeted_read(report_text, fixture_file, 'Implementation')
+        # Agent writes extracted section to output.md; compare against pre-generated expected
+        result_file = workdir / 'output.md'
+        expected_file = EXPECTED_DIR / size / 'targeted-read.md'
+        return validate_isolated(result_file, expected_file)
 
     elif task_slug == 'build-toc':
         return validate_build_toc(result_file)
