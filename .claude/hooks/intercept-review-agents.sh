@@ -41,12 +41,14 @@ if [[ -n "${GEMINI_REVIEW_MODEL:-}" ]]; then
   MODEL_ARGS=(-m "$GEMINI_REVIEW_MODEL")
 fi
 
-# Run Gemini in read-only mode (plan) — reviews must not write files or make commits
+# Run Gemini in read-only mode (plan) with project-scoped policy that adds
+# read-only shell commands (git diff, grep, etc.) needed for code reviews.
 GEMINI_OUTPUT=$(
   printf "%s\n" "$PROMPT" \
   | gemini \
       -p "Perform the review task described in the input above." \
       --approval-mode plan \
+      --policy "$CWD/.claude/hooks/gemini-review-policy.toml" \
       --include-directories "$CWD" \
       -o text \
       "${MODEL_ARGS[@]}" \

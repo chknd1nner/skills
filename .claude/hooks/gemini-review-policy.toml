@@ -1,0 +1,23 @@
+# gemini-review-policy.toml
+# Project-scoped Gemini CLI policy for review agents.
+# Used with: --approval-mode plan --policy <this-file>
+#
+# Plan mode blocks all run_shell_command by default. This file extends it to
+# allow specific read-only shell commands needed for code review (git diffs,
+# log inspection, search). All write operations remain blocked by plan mode.
+
+# Read-only git commands for inspecting diffs, history, and structure
+[[rule]]
+commandPrefix = ["git diff", "git log", "git show", "git status", "git blame", "git rev-parse", "git ls-files"]
+decision = "allow"
+priority = 100
+modes = ["plan"]
+interactive = false
+
+# Text search tools for codebase exploration
+[[rule]]
+commandPrefix = ["grep", "rg", "find"]
+decision = "allow"
+priority = 100
+modes = ["plan"]
+interactive = false
