@@ -1,8 +1,26 @@
 use std::io::IsTerminal;
 use crate::document::{Document, Section};
 
+/// Check if stdout is a terminal, with env var override for testing.
+/// MDEDIT_FORCE_TTY=1 forces TTY mode (for testing terminal output paths).
+/// MDEDIT_FORCE_TTY=0 forces pipe mode (for testing pipe output paths).
 pub fn is_tty() -> bool {
-    std::io::stdout().is_terminal()
+    match std::env::var("MDEDIT_FORCE_TTY").as_deref() {
+        Ok("1") => true,
+        Ok("0") => false,
+        _ => std::io::stdout().is_terminal(),
+    }
+}
+
+/// Emit verification output for write operations.
+/// TTY: prints to stdout. Piped: prints to stderr.
+/// Dry-run always goes to stdout (preview IS the requested data).
+pub fn emit_verification(output: &str, dry_run: bool) {
+    if dry_run || is_tty() {
+        print!("{}", output);
+    } else {
+        eprint!("{}", output);
+    }
 }
 
 /// Format the neighborhood view for a write operation.

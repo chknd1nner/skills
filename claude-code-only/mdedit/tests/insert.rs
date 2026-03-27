@@ -12,7 +12,7 @@ fn insert_after_section() {
                 "--after", "First", "--heading", "## Second", "--content", "Second content."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("INSERTED"));
+        .stderr(predicate::str::contains("INSERTED"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     let first_pos = result.find("## First").unwrap();
@@ -53,7 +53,7 @@ fn insert_warns_on_level_mismatch() {
                 "--after", "First", "--heading", "### Wrong Level"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("\u{26a0}"));
+        .stderr(predicate::str::contains("\u{26a0}"));
     drop(dir);
 }
 
@@ -93,7 +93,7 @@ fn insert_after_preamble() {
                 "--after", "_preamble", "--heading", "## New Section", "--content", "New content."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("INSERTED"));
+        .stderr(predicate::str::contains("INSERTED"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     let preamble_pos = result.find("Preamble text.").unwrap();

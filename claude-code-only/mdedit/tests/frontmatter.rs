@@ -40,7 +40,7 @@ fn frontmatter_set() {
         .args(&["frontmatter", "set", file.to_str().unwrap(), "title", "\"New\""])
         .assert()
         .success()
-        .stdout(predicate::str::contains("FRONTMATTER SET:"));
+        .stderr(predicate::str::contains("FRONTMATTER SET:"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("New"));
@@ -55,7 +55,7 @@ fn frontmatter_delete_key() {
         .args(&["frontmatter", "delete", file.to_str().unwrap(), "draft"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("FRONTMATTER DELETED:"));
+        .stderr(predicate::str::contains("FRONTMATTER DELETED:"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(!result.contains("draft"));

@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::error::MdeditError;
+use crate::output::emit_verification;
 use crate::parser;
 
 // ---------------------------------------------------------------------------
@@ -245,39 +246,29 @@ pub fn run_set(file: &str, key: &str, value: &str, dry_run: bool) -> Result<(), 
         .unwrap_or_else(|| "(not set)".to_string());
     let new_display = display_value(&new_val);
 
+    let mut output = String::new();
     if dry_run {
-        println!("DRY RUN — no changes written");
-        println!();
-        println!("WOULD SET: {} (was {} → would be {})", key, old_display, new_display);
-        println!();
-        println!("---");
-        for (k, v) in &map {
-            let k_str = if let serde_yaml::Value::String(s) = k { s.as_str() } else { continue };
-            if k_str == key {
-                println!("→ {}: {}", k_str, display_value(v));
-            } else {
-                println!("  {}: {}", k_str, display_value(v));
-            }
-        }
-        println!("---");
+        output.push_str("DRY RUN — no changes written\n\n");
+        output.push_str(&format!("WOULD SET: {} (was {} → would be {})\n", key, old_display, new_display));
     } else {
         let new_source = splice_frontmatter(&source, fm_range.clone(), &new_yaml_body);
         std::fs::write(file, &new_source)
             .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", file, e)))?;
 
-        println!("FRONTMATTER SET: {} (was {} → now {})", key, old_display, new_display);
-        println!();
-        println!("---");
-        for (k, v) in &map {
-            let k_str = if let serde_yaml::Value::String(s) = k { s.as_str() } else { continue };
-            if k_str == key {
-                println!("→ {}: {}", k_str, display_value(v));
-            } else {
-                println!("  {}: {}", k_str, display_value(v));
-            }
-        }
-        println!("---");
+        output.push_str(&format!("FRONTMATTER SET: {} (was {} → now {})\n", key, old_display, new_display));
     }
+    output.push('\n');
+    output.push_str("---\n");
+    for (k, v) in &map {
+        let k_str = if let serde_yaml::Value::String(s) = k { s.as_str() } else { continue };
+        if k_str == key {
+            output.push_str(&format!("→ {}: {}\n", k_str, display_value(v)));
+        } else {
+            output.push_str(&format!("  {}: {}\n", k_str, display_value(v)));
+        }
+    }
+    output.push_str("---\n");
+    emit_verification(&output, dry_run);
 
     Ok(())
 }
@@ -316,31 +307,25 @@ pub fn run_delete(file: &str, key: &str, dry_run: bool) -> Result<(), MdeditErro
     map.remove(&yaml_key);
     let new_yaml_body = serialize_mapping(&map)?;
 
+    let mut output = String::new();
     if dry_run {
-        println!("DRY RUN — no changes written");
-        println!();
-        println!("WOULD DELETE: {}", key);
-        println!();
-        println!("---");
-        for (k, v) in &map {
-            let k_str = if let serde_yaml::Value::String(s) = k { s.as_str() } else { continue };
-            println!("  {}: {}", k_str, display_value(v));
-        }
-        println!("---");
+        output.push_str("DRY RUN — no changes written\n\n");
+        output.push_str(&format!("WOULD DELETE: {}\n", key));
     } else {
         let new_source = splice_frontmatter(&source, fm_range.clone(), &new_yaml_body);
         std::fs::write(file, &new_source)
             .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", file, e)))?;
 
-        println!("FRONTMATTER DELETED: {}", key);
-        println!();
-        println!("---");
-        for (k, v) in &map {
-            let k_str = if let serde_yaml::Value::String(s) = k { s.as_str() } else { continue };
-            println!("  {}: {}", k_str, display_value(v));
-        }
-        println!("---");
+        output.push_str(&format!("FRONTMATTER DELETED: {}\n", key));
     }
+    output.push('\n');
+    output.push_str("---\n");
+    for (k, v) in &map {
+        let k_str = if let serde_yaml::Value::String(s) = k { s.as_str() } else { continue };
+        output.push_str(&format!("  {}: {}\n", k_str, display_value(v)));
+    }
+    output.push_str("---\n");
+    emit_verification(&output, dry_run);
 
     Ok(())
 }

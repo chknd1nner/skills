@@ -28,7 +28,7 @@ fn file_mode_workflow() {
                 "--from-file", temp_section.to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("REPLACED"));
+        .stderr(predicate::str::contains("REPLACED"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("Modified content."));

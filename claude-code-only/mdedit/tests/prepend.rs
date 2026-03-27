@@ -12,8 +12,8 @@ fn prepend_to_section() {
         .args(&["prepend", file.to_str().unwrap(), "Section", "--content", "Prepended line."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("PREPENDED"))
-        .stdout(predicate::str::contains("+"));
+        .stderr(predicate::str::contains("PREPENDED"))
+        .stderr(predicate::str::contains("+"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("Prepended line."));
@@ -67,7 +67,7 @@ fn prepend_shows_plus_prefix() {
         .args(&["prepend", file.to_str().unwrap(), "Section", "--content", "Added."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("+ Added."));
+        .stderr(predicate::str::contains("+ Added."));
     drop(dir);
 }
 
@@ -117,8 +117,8 @@ fn prepend_multiline_content() {
         .args(&["prepend", file.to_str().unwrap(), "Section", "--content", "Line one.\nLine two."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("+ Line one."))
-        .stdout(predicate::str::contains("+ Line two."));
+        .stderr(predicate::str::contains("+ Line one."))
+        .stderr(predicate::str::contains("+ Line two."));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("Line one.\nLine two."));
@@ -137,9 +137,9 @@ fn prepend_to_preamble_existing() {
         .args(&["prepend", file.to_str().unwrap(), "_preamble", "--content", "Prepended line."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("PREPENDED"))
-        .stdout(predicate::str::contains("_preamble"))
-        .stdout(predicate::str::contains("+ Prepended line."));
+        .stderr(predicate::str::contains("PREPENDED"))
+        .stderr(predicate::str::contains("_preamble"))
+        .stderr(predicate::str::contains("+ Prepended line."));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("Prepended line."));
@@ -161,7 +161,7 @@ fn prepend_to_preamble_creates_when_absent() {
         .args(&["prepend", file.to_str().unwrap(), "_preamble", "--content", "New preamble."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("PREPENDED"));
+        .stderr(predicate::str::contains("PREPENDED"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("New preamble."));

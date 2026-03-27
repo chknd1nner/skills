@@ -1,7 +1,7 @@
 use crate::addressing::{resolve, ResolvedSection};
 use crate::content::resolve_content;
 use crate::error::MdeditError;
-use crate::output::{find_next_section, find_previous_section, format_section_preview};
+use crate::output::{emit_verification, find_next_section, find_previous_section, format_section_preview};
 use crate::parser;
 use crate::whitespace::normalise;
 
@@ -104,7 +104,7 @@ pub fn run(
             }
 
             if dry_run {
-                print!("{}", output);
+                emit_verification(&output, dry_run);
                 return Ok(());
             }
 
@@ -119,7 +119,7 @@ pub fn run(
             std::fs::write(file, &normalised)
                 .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", file, e)))?;
 
-            print!("{}", output);
+            emit_verification(&output, dry_run);
             return Ok(());
         }
     };
@@ -202,7 +202,7 @@ pub fn run(
     }
 
     if dry_run {
-        print!("{}", output);
+        emit_verification(&output, dry_run);
         return Ok(());
     }
 
@@ -222,7 +222,7 @@ pub fn run(
         .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", file, e)))?;
 
     // 12. Print the formatted output
-    print!("{}", output);
+    emit_verification(&output, dry_run);
 
     Ok(())
 }

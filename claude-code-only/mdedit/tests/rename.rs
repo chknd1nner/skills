@@ -10,7 +10,7 @@ fn rename_heading() {
         .args(&["rename", file.to_str().unwrap(), "Old Name", "New Name"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("RENAMED"));
+        .stderr(predicate::str::contains("RENAMED"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("## New Name"));

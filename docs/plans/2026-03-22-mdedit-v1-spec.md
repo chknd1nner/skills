@@ -157,13 +157,19 @@ mdedit extract doc.md "Background" | sed 's/old/new/' | mdedit replace doc.md "B
 
 ## TTY-aware output
 
-Output format adapts based on whether stdout is a terminal:
+Output format adapts based on whether stdout is a terminal. The design serves three audiences: humans (terminal) see everything on screen, scripts (pipes) get clean stdout for chaining, and AI agents (headless environments) capture both streams automatically.
 
 | Command | TTY (terminal) | Pipe (not TTY) |
 |---|---|---|
-| `extract` | `SECTION:` metadata header + content | Raw markdown only |
+| `extract` | `SECTION:` header + content to stdout | `SECTION:` header to stderr, raw content to stdout |
+| `extract --to-file` | `EXTRACTED:` confirmation to stdout | `EXTRACTED:` confirmation to stderr |
 | `outline` | Full formatted outline | Same (unchanged) |
 | Write ops | Verification output to stdout | Verification to stderr |
+| Write ops `--dry-run` | Preview to stdout | Same (unchanged) |
+
+**Rationale:** AI agents running in headless environments evaluate as pipes. Routing verification metadata to stderr (rather than dropping it entirely) means agents still receive the `SECTION:` word counts, line ranges, and child counts they need to verify operations — without breaking downstream data pipes. The `--dry-run` exception exists because a dry-run preview IS the requested data, not verification metadata.
+
+**Testing override:** The environment variable `MDEDIT_FORCE_TTY=1` forces TTY-mode output regardless of actual terminal status. `MDEDIT_FORCE_TTY=0` forces pipe-mode. This enables deterministic testing of both code paths in CI environments where stdout is always piped.
 
 ---
 
@@ -231,9 +237,9 @@ Previous approaches include...
 For the purposes of this document...
 ```
 
-**Output (pipe or `--to-file`):**
+**Output (pipe):**
 
-Raw markdown content only, no metadata header.
+`SECTION:` metadata header is emitted to stderr. Raw markdown content is emitted to stdout. This allows piped consumers to process content while AI agents can still read the metadata on stderr.
 
 **Options:**
 
@@ -253,14 +259,14 @@ all write operations in the pipeline...
 
 **With `--to-file`:**
 
-Only the confirmation line is written to stdout — section content goes to the file, not the terminal:
+Section content goes to the file. The `EXTRACTED:` confirmation line is verification output — it goes to stdout when TTY, stderr when piped:
 
 ```
 EXTRACTED: "## Background" (12 lines, 312 words) → /tmp/section.md
 ```
 
 **Edge cases:**
-- Empty section: outputs `[no content]` (TTY) or empty string (pipe)
+- Empty section: outputs `[no content]` (TTY) or empty stdout (pipe). Metadata header still emitted to stderr.
 - `_preamble`: extracts content before first heading, after frontmatter
 
 ---

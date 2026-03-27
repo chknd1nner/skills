@@ -11,8 +11,8 @@ fn replace_section_content() {
         .args(&["replace", file.to_str().unwrap(), "Section", "--content", "New content."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("REPLACED"))
-        .stdout(predicate::str::contains("→ ## Section"));
+        .stderr(predicate::str::contains("REPLACED"))
+        .stderr(predicate::str::contains("→ ## Section"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("New content."));
@@ -69,7 +69,7 @@ fn replace_warns_on_large_reduction() {
         .args(&["replace", file.to_str().unwrap(), "Section", "--content", "Short."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("⚠"));
+        .stderr(predicate::str::contains("⚠"));
     drop(dir);
 }
 
@@ -121,10 +121,10 @@ fn replace_shows_before_after_metrics() {
         .args(&["replace", file.to_str().unwrap(), "Section", "--content", "New line."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("was"))
-        .stdout(predicate::str::contains("now"))
-        .stdout(predicate::str::contains("lines,"))
-        .stdout(predicate::str::contains("words"));
+        .stderr(predicate::str::contains("was"))
+        .stderr(predicate::str::contains("now"))
+        .stderr(predicate::str::contains("lines,"))
+        .stderr(predicate::str::contains("words"));
     drop(dir);
 }
 
@@ -138,7 +138,7 @@ fn replace_without_children_removes_them() {
                 "--content", "New parent content."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("⚠")); // warns about removed child
+        .stderr(predicate::str::contains("⚠")); // warns about removed child
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("New parent content."));
@@ -174,8 +174,8 @@ fn replace_preamble_existing() {
         .args(&["replace", file.to_str().unwrap(), "_preamble", "--content", "New preamble."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("REPLACED"))
-        .stdout(predicate::str::contains("_preamble"));
+        .stderr(predicate::str::contains("REPLACED"))
+        .stderr(predicate::str::contains("_preamble"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("New preamble."));
@@ -194,7 +194,7 @@ fn replace_preamble_creates_when_absent() {
         .args(&["replace", file.to_str().unwrap(), "_preamble", "--content", "Created preamble."])
         .assert()
         .success()
-        .stdout(predicate::str::contains("REPLACED"));
+        .stderr(predicate::str::contains("REPLACED"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("Created preamble."));
@@ -283,5 +283,20 @@ fn replace_preamble_no_headings_document() {
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(result.contains("Replaced."));
     assert!(!result.contains("Just some text."));
+    drop(dir);
+}
+
+#[test]
+fn replace_tty_shows_verification_on_stdout() {
+    let (dir, file) = common::temp_md_file(
+        "# Doc\n\n## Section\n\nOld content.\n\n## Other\n\nOther content.\n"
+    );
+    Command::cargo_bin("mdedit").unwrap()
+        .env("MDEDIT_FORCE_TTY", "1")
+        .args(&["replace", file.to_str().unwrap(), "Section", "--content", "New content."])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("REPLACED"))
+        .stdout(predicate::str::contains("→ ## Section"));
     drop(dir);
 }

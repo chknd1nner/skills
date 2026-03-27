@@ -12,7 +12,7 @@ fn delete_section() {
         .args(&["delete", file.to_str().unwrap(), "Remove"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("DELETED"));
+        .stderr(predicate::str::contains("DELETED"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(!result.contains("Remove content."));
@@ -31,7 +31,7 @@ fn delete_shows_removed_content() {
         .args(&["delete", file.to_str().unwrap(), "Section"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("First line."));
+        .stderr(predicate::str::contains("First line."));
     drop(dir);
 }
 
@@ -45,8 +45,8 @@ fn delete_warns_about_children() {
         .args(&["delete", file.to_str().unwrap(), "Parent"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("\u{26a0}"))
-        .stdout(predicate::str::contains("child"));
+        .stderr(predicate::str::contains("\u{26a0}"))
+        .stderr(predicate::str::contains("child"));
     drop(dir);
 }
 
@@ -76,7 +76,7 @@ fn delete_preamble() {
         .args(&["delete", file.to_str().unwrap(), "_preamble"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("DELETED"));
+        .stderr(predicate::str::contains("DELETED"));
 
     let result = std::fs::read_to_string(&file).unwrap();
     assert!(!result.contains("Preamble text here."));

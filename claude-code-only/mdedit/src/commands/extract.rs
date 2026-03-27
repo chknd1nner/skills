@@ -2,6 +2,7 @@ use crate::addressing::{resolve, ResolvedSection};
 use crate::counting::{self, section_own_word_count, section_word_count};
 use crate::document::Section;
 use crate::error::MdeditError;
+use crate::output::{is_tty, emit_verification};
 use crate::parser;
 
 pub fn run(
@@ -51,14 +52,23 @@ fn extract_preamble(
             .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", out_path, e)))?;
         let lines = content.lines().count();
         let words = counting::word_count(&content, &(0..content.len()));
-        println!("EXTRACTED: \"_preamble\" ({} lines, {} words) → {}", lines, words, out_path);
+        let confirmation = format!("EXTRACTED: \"_preamble\" ({} lines, {} words) → {}\n", lines, words, out_path);
+        emit_verification(&confirmation, false);
     } else {
-        // Always show metadata header (whether TTY or piped)
         if content.is_empty() {
-            println!("SECTION: \"_preamble\" — 0 words\n\n[no content]");
+            if is_tty() {
+                println!("SECTION: \"_preamble\" — 0 words\n\n[no content]");
+            } else {
+                eprintln!("SECTION: \"_preamble\" — 0 words");
+            }
         } else {
             let words = counting::word_count(&content, &(0..content.len()));
-            println!("SECTION: \"_preamble\" — {} words\n\n{}", words, content);
+            if is_tty() {
+                println!("SECTION: \"_preamble\" — {} words\n\n{}", words, content);
+            } else {
+                eprintln!("SECTION: \"_preamble\" — {} words", words);
+                println!("{}", content);
+            }
         }
     }
 
@@ -101,33 +111,45 @@ fn extract_section(
         std::fs::write(out_path, &content)
             .map_err(|e| MdeditError::FileError(format!("Cannot write '{}': {}", out_path, e)))?;
         let line_count = content.lines().count();
-        println!(
-            "EXTRACTED: \"{}\" ({} lines, {} words) → {}",
+        let confirmation = format!(
+            "EXTRACTED: \"{}\" ({} lines, {} words) → {}\n",
             heading, line_count, words, out_path
         );
+        emit_verification(&confirmation, false);
     } else {
-        // Always show metadata header
-        if no_children && children_count > 0 {
-            println!(
+        // Build the metadata header
+        let header = if no_children && children_count > 0 {
+            format!(
                 "SECTION: \"{}\" — {} words, lines {}–{} ({} children excluded)",
                 heading, words, line_start, line_end, children_count
-            );
+            )
         } else if children_count > 0 {
-            println!(
+            format!(
                 "SECTION: \"{}\" — {} words, lines {}–{}, {} children",
                 heading, words, line_start, line_end, children_count
-            );
+            )
         } else {
-            println!(
+            format!(
                 "SECTION: \"{}\" — {} words, lines {}–{}",
                 heading, words, line_start, line_end
-            );
-        }
-        println!();
-        if is_empty {
-            println!("[no content]");
+            )
+        };
+
+        if is_tty() {
+            println!("{}", header);
+            println!();
+            if is_empty {
+                println!("[no content]");
+            } else {
+                println!("{}", content);
+            }
         } else {
-            println!("{}", content);
+            // Piped: metadata header to stderr, raw content to stdout
+            eprintln!("{}", header);
+            if !is_empty {
+                println!("{}", content);
+            }
+            // When empty and piped: nothing on stdout (empty string per spec)
         }
     }
 
