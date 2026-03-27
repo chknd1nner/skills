@@ -1,8 +1,8 @@
-# Gemini Review Hook — Design Spec
+# Gemini Review Hook for Superpowers — Design Spec
 
 ## Overview
 
-A project-scoped Claude Code hook that intercepts review-type Agent calls and routes them to Gemini CLI instead of spawning a Claude subagent. This distributes review workload across both Claude Pro and Gemini Pro subscriptions, and provides genuine cross-model review as a secondary benefit.
+A project-scoped (or globally scoped depending on user preference) Claude Code hook that intercepts review-type Agent calls made by the Superpowers plugin and routes them to Gemini CLI instead of spawning a Claude subagent. This distributes review workload across both Claude Pro and Gemini Pro subscriptions, and provides genuine cross-model review as a secondary benefit.
 
 The mechanism is entirely hook-based. No superpowers skill files are modified, so it survives upstream version updates.
 
@@ -24,7 +24,7 @@ A `PreToolUse` hook fires on every `Agent` tool call. The hook detects whether t
 
 Two files:
 
-**`.claude/settings.json`** — registers the hook at project scope.
+**`.claude/settings.json`** (project) or **`~/.claude/settings.json`** (global) — registers the hook at the user's preferred scope.
 
 **`.claude/hooks/intercept-review-agents.sh`** — the hook script: detection, Gemini invocation, result delivery, fallback.
 
@@ -125,7 +125,6 @@ The `command` value must be an absolute path. Scoped to this project only via `.
 
 ## Out of Scope
 
-- **Global installation** — project-scoped for now; promotion to global settings is a one-line config change.
 - **Model mapping** — mapping Claude model tiers (Opus/Sonnet/Haiku) to Gemini equivalents is not implemented. Auto mode is sufficient for the review use case.
 - **Routing by review type** — all review call types are handled identically. Differentiating between spec, plan, and code reviews (e.g. to pass different system prompts) is a future option.
 - **Timeout configuration** — Claude Code hook default timeout is 10 minutes, which is sufficient. No custom timeout is set.
