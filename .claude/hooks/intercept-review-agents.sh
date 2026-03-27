@@ -35,24 +35,23 @@ if ! is_review_call; then
   exit 0
 fi
 
-# Build optional model flag
-MODEL_FLAG=""
+# Build optional model arguments array
+MODEL_ARGS=()
 if [[ -n "${GEMINI_REVIEW_MODEL:-}" ]]; then
-  MODEL_FLAG="-m $GEMINI_REVIEW_MODEL"
+  MODEL_ARGS=(-m "$GEMINI_REVIEW_MODEL")
 fi
 
 # Run Gemini with full workspace access
-# shellcheck disable=SC2086
 GEMINI_OUTPUT=$(
-  echo "$PROMPT" \
+  printf "%s\n" "$PROMPT" \
   | gemini \
       -p "Perform the review task described in the input above." \
       --approval-mode yolo \
       --include-directories "$CWD" \
       -o text \
-      $MODEL_FLAG \
+      "${MODEL_ARGS[@]}" \
       2>/dev/null
-)
+) || exit 0
 
 # Fallback: if Gemini returned nothing, let the real Agent run
 if [[ -z "$GEMINI_OUTPUT" ]]; then
