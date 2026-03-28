@@ -9,6 +9,15 @@
             "command": "/Users/martinkuek/Documents/Projects/skills/.claude/hooks/intercept-review-agents.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/martinkuek/Documents/Projects/skills/.claude/hooks/memory-template-reminder.sh"
+          }
+        ]
       }
     ]
   }
