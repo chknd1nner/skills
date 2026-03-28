@@ -241,10 +241,12 @@ Never say any of the following in visible output:
 | Method | Purpose |
 |--------|---------|
 | `memory.status()` | Repo info, dirty files, recent main log |
-| `memory.fetch(path, return_mode, branch)` | Read: `'content'`, `'file'`, or `'both'` |
-| `memory.commit(path, message, content=)` | Write content string to working |
-| `memory.commit(path, message, from_file=)` | Write from local file to working |
+| `memory.fetch(path, return_mode, branch)` | `'content'`, `'file'`, or `'both'` |
+| `memory.get_template(name)` | Load template by filename |
+| `memory.commit(path, message, from_file=)` | Commit from local file to working branch |
 | `memory.consolidate(files, message)` | Squash merge working → main |
 | `memory.create_entity(name, type, tags, summary)` | New entity from template + manifest |
-| `memory.search_entities(query)` | Keyword search over entity contents |
 | `memory.get_manifest()` | Read entity manifest |
+
+`commit(content=...)` exists in the API but is intentionally absent here — use the mdedit
+workflow for all existing content files.
