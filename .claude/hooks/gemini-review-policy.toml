@@ -15,6 +15,7 @@ denyMessage = "Write operations are blocked during code review."
 
 # Block destructive git commands
 [[rule]]
+toolName = "run_shell_command"
 commandPrefix = ["git commit", "git push", "git checkout", "git reset", "git rebase", "git rm", "git clean", "git merge", "git tag"]
 decision = "deny"
 priority = 100
