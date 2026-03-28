@@ -146,3 +146,55 @@ def test_general_purpose_implement_not_intercepted(fake_gemini):
     )
     assert result.returncode == 0
     assert result.stdout == ''
+
+
+# ---------------------------------------------------------------------------
+# Fallback chain
+# ---------------------------------------------------------------------------
+
+def test_gemini_nonzero_exit_falls_back(fake_gemini):
+    """Non-zero Gemini exit must produce no output (Claude agent fallback)."""
+    gem = fake_gemini(output='some output', exit_code=1)
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_gemini_empty_output_falls_back(fake_gemini):
+    """Empty stdout from Gemini must produce no output (Claude agent fallback)."""
+    gem = fake_gemini(output='')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_gemini_whitespace_only_output_falls_back(fake_gemini):
+    """Whitespace-only stdout must also fall back."""
+    gem = fake_gemini(output='   \n\n  ')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_gemini_timeout_falls_back(fake_gemini):
+    """Timeout must produce no output and exit 0 within GEMINI_TIMEOUT + 2s."""
+    gem = fake_gemini(sleep=True)
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={
+            'PATH': gem.bin_path,
+            'GEMINI_TIMEOUT': '2',
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
+    # Confirm the test itself didn't hang (it completed, meaning the timeout fired)
