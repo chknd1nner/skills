@@ -22,11 +22,13 @@ A `PreToolUse` hook fires on every `Agent` tool call. The hook detects whether t
 
 ## Components
 
-Two files:
+Three files:
 
 **`.claude/settings.json`** (project) or **`~/.claude/settings.json`** (global) — registers the hook at the user's preferred scope.
 
 **`.claude/hooks/intercept-review-agents.sh`** — the hook script: detection, Gemini invocation, result delivery, fallback.
+
+**`.claude/hooks/gemini-review-policy.toml`** — project-scoped Gemini CLI policy that enforces reviewer separation of duties (see Gemini Invocation below).
 
 ---
 
@@ -65,7 +67,7 @@ GEMINI_OUTPUT=$(
 
 **Stdin carries the prompt; `-p` provides the trailing instruction** — together they form the complete request. This pattern is explicitly documented in the Gemini CLI headless reference.
 
-**`--approval-mode plan`** — read-only mode. Gemini can read files, run `git diff`, grep the codebase, and follow threads as needed, but cannot write files or execute mutating commands. This enforces strict separation of duties: reviewers observe and report, they do not modify. `yolo` was considered but rejected — it allowed Gemini to make unsolicited edits and write files during reviews, which is outside the reviewer role.
+**`--approval-mode yolo --policy "$CWD/.claude/hooks/gemini-review-policy.toml"`** — yolo mode allows Gemini full read and explore access (files, `git diff`, grep, shell commands) without prompting. The project-scoped policy file enforces reviewer separation of duties by explicitly denying `write_file`, `replace`, and destructive git commands (`git commit`, `git push`, `git checkout`, `git reset`, etc.). This deny-list approach is preferred over `--approval-mode plan` (an allowlist) because plan mode blocks shell execution entirely, preventing `git diff` — which reviewers need. The policy file is passed explicitly via `--policy` and never touches the global `~/.gemini/policies/` directory.
 
 **`--include-directories "$CWD"`** — scopes Gemini's filesystem access to the project workspace.
 
