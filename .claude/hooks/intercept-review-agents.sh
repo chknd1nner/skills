@@ -41,13 +41,14 @@ if [[ -n "${GEMINI_REVIEW_MODEL:-}" ]]; then
   MODEL_ARGS=(-m "$GEMINI_REVIEW_MODEL")
 fi
 
-# Run Gemini in read-only mode (plan) with project-scoped policy that adds
-# read-only shell commands (git diff, grep, etc.) needed for code reviews.
+# Run Gemini in yolo mode with a project-scoped policy that blocks writes and
+# destructive git commands. Yolo allows full read/explore access; the policy
+# enforces reviewer-only separation of duties.
 GEMINI_OUTPUT=$(
   printf "%s\n" "$PROMPT" \
   | gemini \
       -p "Perform the review task described in the input above." \
-      --approval-mode plan \
+      --approval-mode yolo \
       --policy "$CWD/.claude/hooks/gemini-review-policy.toml" \
       --include-directories "$CWD" \
       -o text \

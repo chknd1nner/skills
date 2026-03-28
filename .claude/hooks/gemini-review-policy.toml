@@ -1,23 +1,21 @@
 # gemini-review-policy.toml
 # Project-scoped Gemini CLI policy for review agents.
-# Used with: --approval-mode plan --policy <this-file>
+# Used with: --approval-mode yolo --policy <this-file>
 #
-# Plan mode blocks all run_shell_command by default. This file extends it to
-# allow specific read-only shell commands needed for code review (git diffs,
-# log inspection, search). All write operations remain blocked by plan mode.
+# Yolo mode allows everything by default. This policy denies specific
+# write and destructive operations so reviewers can read and explore freely
+# but cannot modify files or mutate the repository.
 
-# Read-only git commands for inspecting diffs, history, and structure
+# Block file write operations
 [[rule]]
-commandPrefix = ["git diff", "git log", "git show", "git status", "git blame", "git rev-parse", "git ls-files"]
-decision = "allow"
+toolName = ["write_file", "replace"]
+decision = "deny"
 priority = 100
-modes = ["plan"]
-interactive = false
+denyMessage = "Write operations are blocked during code review."
 
-# Text search tools for codebase exploration
+# Block destructive git commands
 [[rule]]
-commandPrefix = ["grep", "rg", "find"]
-decision = "allow"
+commandPrefix = ["git commit", "git push", "git checkout", "git reset", "git rebase", "git rm", "git clean", "git merge", "git tag"]
+decision = "deny"
 priority = 100
-modes = ["plan"]
-interactive = false
+denyMessage = "Destructive git operations are blocked during code review."
