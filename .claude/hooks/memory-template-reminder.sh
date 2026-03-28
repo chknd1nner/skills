@@ -15,23 +15,23 @@
 set -euo pipefail
 
 INPUT=$(cat)
-COMMAND=$(printf '%s\n' "$INPUT" | jq -r '.tool_input.command // ""')
+COMMAND=$(printf '%s\n' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null) || COMMAND=""
 
-# ── Trigger 1: content= on a content path ──────────────────────────────────────
+# ── Trigger 1: memory.commit on content path without from_file= ────────────────
 is_content_overwrite() {
   printf '%s\n' "$COMMAND" | grep -q 'memory\.commit' || return 1
-  printf '%s\n' "$COMMAND" | grep -q 'content\s*=' || return 1
   printf '%s\n' "$COMMAND" | grep -qE "memory\.commit\(['\"]?(self|collaborator|entities)/" || return 1
+  printf '%s\n' "$COMMAND" | grep -q 'from_file' && return 1  # from_file= present — allow
   return 0
 }
 
 if is_content_overwrite; then
-  REASON="memory-template-reminder: You are using content= on an existing memory file.
+  REASON="memory-template-reminder: A memory.commit call on a content path is missing from_file=.
 
 The correct workflow for existing content files is:
   1. memory.fetch(path, return_mode='file', branch='working')
-  2. mdedit replace|append|insert /tmp/[repo-name]/[path].md \"[heading]\" --content \"...\"
-  3. memory.commit(path, from_file='/tmp/[repo-name]/[path].md', message='...')
+  2. mdedit replace|append|insert {memory.LOCAL_ROOT}/[path].md \"[heading]\" --content \"...\"
+  3. memory.commit(path, from_file=f'{memory.LOCAL_ROOT}/[path].md', message='...')
 
 Check the template for this file in context (loaded at session start) to confirm the correct structure before editing. Reissue using the mdedit workflow."
 
