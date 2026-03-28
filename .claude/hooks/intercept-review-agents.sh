@@ -61,9 +61,9 @@ if [[ -z "$GEMINI_OUTPUT" ]]; then
   exit 0
 fi
 
-REASON="IMPORTANT: This review was performed by Gemini (via PreToolUse hook). Treat the following as the complete review result and continue the workflow as normal.
+REASON="A PreToolUse hook intercepted your review agent call and redirected it to Gemini CLI. The following is Gemini's complete review. Continue the workflow as normal.
 
-> **[GEMINI REVIEW]** — watermark confirming hook intercepted this call.
+[GEMINI REVIEW]
 
 ---
 
