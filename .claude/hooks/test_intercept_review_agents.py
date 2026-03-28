@@ -198,3 +198,84 @@ def test_gemini_timeout_falls_back(fake_gemini):
     assert result.returncode == 0
     assert result.stdout == ''
     # Confirm the test itself didn't hang (it completed, meaning the timeout fired)
+
+
+# ---------------------------------------------------------------------------
+# Output validation
+# ---------------------------------------------------------------------------
+
+def test_output_json_structure(fake_gemini):
+    """Deny JSON must match the exact structure CC expects."""
+    gem = fake_gemini(output='## Strengths\n\nLooks good.\n\n### Assessment\n\nReady to merge: Yes')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)  # Raises if invalid JSON
+    hs = output['hookSpecificOutput']
+    assert hs['hookEventName'] == 'PreToolUse'
+    assert hs['permissionDecision'] == 'deny'
+    reason = hs['permissionDecisionReason']
+    assert '[GEMINI REVIEW]' in reason
+    assert 'Looks good.' in reason
+    assert 'Ready to merge: Yes' in reason
+
+
+def test_ansi_codes_in_output_produce_valid_json(fake_gemini):
+    """
+    ANSI escape codes in Gemini output must not corrupt the JSON.
+    This is the original reported bug — json.dumps must properly escape control chars.
+    """
+    ansi_output = 'Review result\n\x1b[1mBold heading\x1b[0m\nNormal text\n\x1b[32mGreen\x1b[0m'
+    gem = fake_gemini(output=ansi_output)
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    # json.loads raises ValueError / json.JSONDecodeError if the JSON is malformed
+    output = json.loads(result.stdout)
+    assert output['hookSpecificOutput']['permissionDecision'] == 'deny'
+    # The ANSI chars should be present in the decoded reason string
+    reason = output['hookSpecificOutput']['permissionDecisionReason']
+    assert 'Bold heading' in reason
+
+
+def test_model_override_forwarded_to_gemini(tmp_path):
+    """GEMINI_REVIEW_MODEL must be passed to gemini as -m <model>."""
+    args_file = tmp_path / 'invocation_args.txt'
+    script = tmp_path / 'gemini'
+    script.write_text(
+        f'#!/usr/bin/env bash\necho "$@" > {args_file}\necho "FAKE REVIEW"\n'
+    )
+    script.chmod(stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+    bin_path = f'{tmp_path}:{os.environ.get("PATH", "")}'
+
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': bin_path, 'GEMINI_REVIEW_MODEL': 'gemini-2.0-flash'},
+    )
+    assert result.returncode == 0
+    args = args_file.read_text()
+    assert '-m' in args
+    assert 'gemini-2.0-flash' in args
+
+
+def test_debug_logging_writes_to_log_file(fake_gemini, tmp_path):
+    """GEMINI_DEBUG=1 must write log entries to GEMINI_LOG_FILE."""
+    gem = fake_gemini(output='FAKE REVIEW')
+    log_file = str(tmp_path / 'hook-test.log')
+    run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={
+            'PATH': gem.bin_path,
+            'GEMINI_DEBUG': '1',
+            'GEMINI_LOG_FILE': log_file,
+        },
+    )
+    import pathlib
+    log_content = pathlib.Path(log_file).read_text()
+    assert 'intercepted' in log_content
+    assert 'gemini exit=0' in log_content
+    assert 'jq SUCCESS' in log_content  # log line kept for parity with bash version
