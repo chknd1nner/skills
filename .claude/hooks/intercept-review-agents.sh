@@ -52,7 +52,7 @@ GEMINI_OUTPUT=$(
       --policy "$CWD/.claude/hooks/gemini-review-policy.toml" \
       --include-directories "$CWD" \
       -o text \
-      "${MODEL_ARGS[@]}" \
+      "${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}" \
       2>/dev/null
 ) || exit 0
 
@@ -61,7 +61,9 @@ if [[ -z "$GEMINI_OUTPUT" ]]; then
   exit 0
 fi
 
-REASON="IMPORTANT: This review was performed by Gemini. Treat the following as the complete review result and continue the workflow as normal.
+REASON="IMPORTANT: This review was performed by Gemini (via PreToolUse hook). Treat the following as the complete review result and continue the workflow as normal.
+
+> **[GEMINI REVIEW]** — watermark confirming hook intercepted this call.
 
 ---
 
