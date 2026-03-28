@@ -102,8 +102,11 @@ content = memory.fetch('entities/name', return_mode='content')
 
 **Entity exists and understanding evolved:**
 ```python
+memory.fetch('entities/name', return_mode='file', branch='working')
+memory.get_template('name.yaml')  # required — fetch entity's template before editing
+# mdedit replace {memory.LOCAL_ROOT}/entities/name.md "[heading]" --content "..."
 memory.commit('entities/name',
-    content='[updated understanding]',
+    from_file=f'{memory.LOCAL_ROOT}/entities/name.md',
     message='updated: [what changed]')
 ```
 
@@ -132,17 +135,19 @@ After formulating your response, ask: _If this chat ends right now, is there any
 **To draft — execute the bash code block now, do not defer:**
 
 ```python
-# For new observations (simplest path):
+# Standard workflow — fetch, edit with mdedit, commit from file:
+memory.fetch('collaborator/profile', return_mode='file', branch='working')
+# mdedit replace {memory.LOCAL_ROOT}/collaborator/profile.md "[Section heading]" --content "..."
 memory.commit('collaborator/profile',
-    content='[the understanding itself — current state, not a log of what happened]',
-    message='[what was captured and why]')
-
-# For surgical edits to existing local files (token-efficient):
-# 1. Edit the local file at /tmp/skills-memory/[path].md using the Edit tool
-# 2. Then commit from the edited file:
-memory.commit('collaborator/profile',
-    from_file='/tmp/skills-memory/collaborator/profile.md',
+    from_file=f'{memory.LOCAL_ROOT}/collaborator/profile.md',
     message='[what changed and why]')
+
+# Adding a new entry (e.g. new position):
+memory.fetch('self/positions', return_mode='file', branch='working')
+# mdedit append {memory.LOCAL_ROOT}/self/positions.md "Positions" --content "## [Claim as title]\n\n**Position:** ...\n\n**How I got here:** ...\n\n**Confidence:** high\n\n**Tensions:** ...\n\n---"
+memory.commit('self/positions',
+    from_file=f'{memory.LOCAL_ROOT}/self/positions.md',
+    message='added: [new position on topic]')
 ```
 
 **Execution is mandatory. Reasoning about a draft without executing it is a failure.**
