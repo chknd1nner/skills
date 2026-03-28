@@ -26,41 +26,61 @@ sys.path.insert(0, '/Users/martinkuek/Documents/Projects/skills/common/continuit
 from memory_system import connect
 
 memory = connect(env_path='/Users/martinkuek/Documents/Projects/skills/.env')
-memory.LOCAL_ROOT = '/tmp/skills-memory'
+repo_short = memory.git.repo_name.split('/')[-1]
+memory.LOCAL_ROOT = f'/tmp/{repo_short}'
 info = memory.status()
 
 print(f"Connected: {info['repo']}")
 
-# Load pre-injected context (explicitly fetched in Claude Code — no <document> tag injection)
-for path in ['self/positions', 'self/methods', 'self/platform-knowledge', 'self/open-questions']:
-    content = memory.fetch(path, return_mode='both', branch='main')
-    print(f"\n=== {path} ===\n{content}")
+# 1. Config — fetch from working (most current state)
+#    Note: memory.config is loaded from main by _load_config() at connect() time.
+#    If _config.yaml is dirty, the template loop below reflects main, not working.
+config_content = memory.fetch('_config.yaml', return_mode='content', branch='working')
+print(f"\n=== _config.yaml ===\n{config_content}")
 
-content = memory.fetch('collaborator/profile', return_mode='both', branch='main')
-print(f"\n=== collaborator/profile ===\n{content}")
+# 2. Templates — one per configured category, derived from config (not hardcoded)
+#    These carry the format and editorial guidance for each space. Refer to them when editing.
+for space_name, space in memory.config.spaces.items():
+    for cat in space.categories:
+        tmpl = memory.get_template(cat['template'])
+        print(f"\n=== TEMPLATE: {cat['template']} ===\n{tmpl}")
 
-# Narrative context — recent crystallised understanding
+# 3. Entity manifest — know what entities exist before deciding to look one up
+manifest = memory.fetch('_entities_manifest.yaml', return_mode='content', branch='main')
+print(f"\n=== _entities_manifest.yaml ===\n{manifest}")
+
+# 4. Core content files — derived from config, not hardcoded
+for space_name, space in memory.config.spaces.items():
+    if space_name == 'entities':
+        continue  # entities fetched on demand, not bulk-loaded
+    for cat in space.categories:
+        path = f'{space_name}/{cat["name"]}'
+        content = memory.fetch(path, return_mode='both', branch='main')
+        print(f"\n=== {path} ===\n{content}")
+
+# 5. Narrative context — recent crystallised understanding
 print("\n=== RECENT MAIN LOG ===")
 for entry in info['recent_log'][:5]:
     print(f"  [{entry['date']}] {entry['message'][:120]}")
 
-# Dirty files — working branch ahead of main
+# 6. Dirty files — working branch ahead of main
 print("\n=== DIRTY FILES (working ahead of main) ===")
 if info['dirty_files']:
     for f in info['dirty_files']:
         print(f"  - {f}")
     for f in info['dirty_files']:
         memory.fetch(f, return_mode='file', branch='working')
-    print("(fetched working versions to /tmp/skills-memory/ for editing)")
+    print(f"(fetched working versions to /tmp/{repo_short}/ for editing)")
 else:
     print("(none — working and main are in sync)")
 ```
 
 After connecting:
 1. All pre-injected context is now loaded — treat as immediate awareness
-2. Recent main log shows when and why understanding was last crystallised
-3. Dirty files show hanging work from previous sessions — pick up the thread naturally
-4. Apply all context to your response. Do not narrate the process.
+2. Templates carry the format and editorial guidance for each space — refer to them when editing
+3. Recent main log shows when and why understanding was last crystallised
+4. Dirty files show hanging work from previous sessions — pick up the thread naturally
+5. Apply all context to your response. Do not narrate the process.
 
 ## Per-response loop
 
