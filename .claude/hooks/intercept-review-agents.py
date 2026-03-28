@@ -71,7 +71,12 @@ def main() -> None:
     log(f'intercepted | type={subagent_type} | desc={description[:60]}')
 
     # Build Gemini command
-    timeout = int(os.environ.get('GEMINI_TIMEOUT', '120'))
+    try:
+        timeout = int(os.environ.get('GEMINI_TIMEOUT', '120'))
+        if timeout <= 0:
+            timeout = 120
+    except ValueError:
+        timeout = 120
     policy_path = os.path.join(cwd, '.claude', 'hooks', 'gemini-review-policy.toml')
     cmd = [
         'gemini',
@@ -96,6 +101,9 @@ def main() -> None:
         )
     except subprocess.TimeoutExpired:
         log(f'timeout: gemini killed after {timeout}s | falling back to real agent')
+        sys.exit(0)
+    except FileNotFoundError:
+        log('fallback: gemini not found on PATH')
         sys.exit(0)
 
     gemini_output = result.stdout

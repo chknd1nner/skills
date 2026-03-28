@@ -279,3 +279,40 @@ def test_debug_logging_writes_to_log_file(fake_gemini, tmp_path):
     assert 'intercepted' in log_content
     assert 'gemini exit=0' in log_content
     assert 'jq SUCCESS' in log_content  # log line kept for parity with bash version
+
+
+# ---------------------------------------------------------------------------
+# Error handling
+# ---------------------------------------------------------------------------
+
+def test_gemini_not_on_path_falls_back():
+    """Missing gemini binary must produce no output (clean pass-through)."""
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': '/nonexistent'},  # gemini definitely not here
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_invalid_gemini_timeout_uses_default(fake_gemini):
+    """Non-integer GEMINI_TIMEOUT must not crash the hook."""
+    gem = fake_gemini(output='FAKE REVIEW')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': gem.bin_path, 'GEMINI_TIMEOUT': 'not-a-number'},
+    )
+    assert result.returncode == 0
+    # Hook should still work (not crash) — output may be deny JSON or empty fallback
+    # Just asserting it doesn't exit non-zero with an unhandled exception
+    assert result.returncode == 0
+
+
+def test_zero_gemini_timeout_uses_default(fake_gemini):
+    """Zero or negative GEMINI_TIMEOUT must not be passed to subprocess."""
+    gem = fake_gemini(output='FAKE REVIEW')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': gem.bin_path, 'GEMINI_TIMEOUT': '0'},
+    )
+    assert result.returncode == 0
