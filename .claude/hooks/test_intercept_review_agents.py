@@ -73,3 +73,76 @@ def fake_gemini(tmp_path):
         return Gem()
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Detection
+# ---------------------------------------------------------------------------
+
+def test_non_review_general_purpose_passes_through(fake_gemini):
+    """A general-purpose call with a non-review description must not be intercepted."""
+    gem = fake_gemini(output='SHOULD NOT APPEAR')
+    result = run_hook(
+        make_payload('general-purpose', 'Explore codebase for API endpoints'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_explore_subagent_passes_through(fake_gemini):
+    gem = fake_gemini(output='SHOULD NOT APPEAR')
+    result = run_hook(
+        make_payload('Explore', 'Find relevant files'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_code_reviewer_subagent_intercepted(fake_gemini):
+    """subagent_type == 'superpowers:code-reviewer' must always be intercepted."""
+    gem = fake_gemini(output='FAKE REVIEW CONTENT')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    # Non-empty JSON output proves interception (pass-throughs produce no output)
+    output = json.loads(result.stdout)
+    assert output['hookSpecificOutput']['permissionDecision'] == 'deny'
+
+
+def test_general_purpose_review_description_intercepted(fake_gemini):
+    """general-purpose + description starting with 'Review' must be intercepted."""
+    gem = fake_gemini(output='FAKE REVIEW CONTENT')
+    result = run_hook(
+        make_payload('general-purpose', 'Review spec compliance for Task 1'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output['hookSpecificOutput']['permissionDecision'] == 'deny'
+
+
+def test_review_description_case_insensitive(fake_gemini):
+    """Description detection must be case-insensitive."""
+    gem = fake_gemini(output='FAKE REVIEW CONTENT')
+    result = run_hook(
+        make_payload('general-purpose', 'REVIEW the implementation'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output['hookSpecificOutput']['permissionDecision'] == 'deny'
+
+
+def test_general_purpose_implement_not_intercepted(fake_gemini):
+    """Description not starting with 'review' must not be intercepted."""
+    gem = fake_gemini(output='SHOULD NOT APPEAR')
+    result = run_hook(
+        make_payload('general-purpose', 'Implement the caching layer'),
+        env={'PATH': gem.bin_path},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
