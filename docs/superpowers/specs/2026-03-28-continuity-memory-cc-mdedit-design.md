@@ -51,8 +51,11 @@ info = memory.status()
 ### Load order
 
 ```python
-# 1. Config — drives template loading and space structure
-memory.fetch('_config.yaml', return_mode='content', branch='main')
+# 1. Config — fetch from working (most current); note: memory.config is loaded from main
+#    by _load_config() at connect() time. If _config.yaml is dirty, the template loop
+#    in step 2 reflects main, not working — new categories added since last consolidation
+#    will be missed. Known limitation; full fix requires _load_config() to read working.
+memory.fetch('_config.yaml', return_mode='content', branch='working')
 
 # 2. Templates — one per configured category, derived from config (not hardcoded)
 for space_name, space in memory.config.spaces.items():
@@ -63,10 +66,12 @@ for space_name, space in memory.config.spaces.items():
 # 3. Entity manifest — model knows what entities exist before deciding to look one up
 memory.fetch('_entities_manifest.yaml', return_mode='content', branch='main')
 
-# 4. Core content files
-for path in ['self/positions', 'self/methods', 'self/platform-knowledge', 'self/open-questions']:
-    memory.fetch(path, return_mode='both', branch='main')
-memory.fetch('collaborator/profile', return_mode='both', branch='main')
+# 4. Core content files — derived from config, not hardcoded
+for space_name, space in memory.config.spaces.items():
+    if space_name == 'entities':
+        continue  # entities are fetched on demand, not bulk-loaded
+    for cat in space.categories:
+        memory.fetch(f'{space_name}/{cat["name"]}', return_mode='both', branch='main')
 
 # 5. Narrative context + dirty files (unchanged from current)
 ```
