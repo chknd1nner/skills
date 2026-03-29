@@ -115,7 +115,7 @@ Create `tests/mdedit/benchmarks-v2/system-prompts/mdedit.md`. Port from v1 (`tes
 
 The content is identical to v1's `system-mdedit.md` — no structural changes needed.
 
-```markdown
+````markdown
 You are a benchmark agent. Complete the editing task described in the user prompt.
 
 ## Working Context
@@ -370,7 +370,7 @@ After completing the task, write a report to `{{REPORT_PATH}}` with the followin
 
 [How you confirmed the edit was correct — e.g., the file content observed after editing.]
 ```
-```
+````
 
 - [ ] **Step 3: Commit**
 
@@ -846,10 +846,11 @@ FIXTURES_DIR = SCRIPT_DIR / 'fixtures'
 SYSTEM_PROMPTS_DIR = SCRIPT_DIR / 'system-prompts'
 SCENARIOS_DIR = SCRIPT_DIR / 'scenarios'
 RESULTS_DIR = SCRIPT_DIR / 'results'
-MDEDIT_BINARY = (
-    SCRIPT_DIR.parent.parent.parent
-    / 'claude-code-only' / 'mdedit' / 'target' / 'release' / 'mdedit'
-)
+# Candidate paths for mdedit binary, checked in order
+MDEDIT_CANDIDATES = [
+    SCRIPT_DIR.parent.parent.parent / 'claude-code-only' / 'mdedit' / 'target' / 'release' / 'mdedit',
+    Path.home() / '.cargo' / 'bin' / 'mdedit',
+]
 
 ALL_SIZES = ['small', 'medium', 'large']
 ALL_CONDITIONS = ['mdedit', 'baseline']
@@ -907,18 +908,32 @@ def load_prompt_body(prompt_path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def verify_binary() -> Path | None:
-    """Check mdedit exists and is executable. Returns resolved Path or None."""
-    if not MDEDIT_BINARY.exists():
-        print(f'WARNING: mdedit binary not found at {MDEDIT_BINARY}')
-        return None
-    result = subprocess.run(
-        [str(MDEDIT_BINARY), '--help'],
-        capture_output=True, text=True, timeout=5,
-    )
-    if result.returncode != 0:
-        print(f'WARNING: mdedit --help returned {result.returncode}')
-        return None
-    return MDEDIT_BINARY.resolve()
+    """
+    Find mdedit binary. Tries candidate paths, then falls back to
+    `which mdedit`. Returns resolved absolute Path or None.
+    """
+    # Try candidate paths in order
+    for candidate in MDEDIT_CANDIDATES:
+        if candidate.exists():
+            result = subprocess.run(
+                [str(candidate), '--help'],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                print(f'Found mdedit: {candidate.resolve()}')
+                return candidate.resolve()
+
+    # Fallback: check if mdedit is anywhere on PATH
+    which = shutil.which('mdedit')
+    if which:
+        path = Path(which).resolve()
+        print(f'Found mdedit on PATH: {path}')
+        return path
+
+    print('WARNING: mdedit binary not found')
+    print('  Checked:', [str(c) for c in MDEDIT_CANDIDATES])
+    print('  Also ran: which mdedit (not found)')
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1070,10 +1085,16 @@ def run_single(
 
     # Build environment
     env = os.environ.copy()
-    if condition == 'baseline' and binary:
+    if binary:
         binary_dir = str(binary.parent)
-        path_parts = [p for p in env.get('PATH', '').split(':') if p != binary_dir]
-        env['PATH'] = ':'.join(path_parts)
+        if condition == 'mdedit':
+            # Ensure mdedit is on PATH even in restricted terminal environments
+            if binary_dir not in env.get('PATH', '').split(':'):
+                env['PATH'] = binary_dir + ':' + env.get('PATH', '')
+        elif condition == 'baseline':
+            # Remove mdedit from PATH so baseline can't accidentally use it
+            path_parts = [p for p in env.get('PATH', '').split(':') if p != binary_dir]
+            env['PATH'] = ':'.join(path_parts)
 
     start = time.time()
 

@@ -104,12 +104,14 @@ python3 run.py [--scenarios replace-small,delete-section]
                [--conditions mdedit,baseline]
                [--reps 3]
                [--model haiku]
-               [--workers 5]
+               [--workers 15]
                [--timeout 300]
                [--dry-run]
 ```
 
 All flags are optional; defaults run the full matrix.
+
+All runs are fully parallelizable — each gets its own `/tmp` workdir with an independent fixture copy, and `--bare` mode eliminates shared config state. The only constraint on `--workers` is API rate limits, not filesystem contention. Default of 15 keeps a full 66-run suite under 2 minutes with Haiku.
 
 ### Agent Invocation
 
@@ -133,7 +135,9 @@ Key changes from v1:
 
 ### Environment
 
-For the baseline condition, the mdedit binary directory is removed from PATH so the agent cannot accidentally use it. For the mdedit condition, PATH includes the binary directory.
+For the mdedit condition, the binary's parent directory is explicitly added to PATH — this ensures agents can find mdedit even in restricted terminal environments (e.g., VSCode integrated terminal where `~/.cargo/bin` may not be on PATH). For the baseline condition, the mdedit binary directory is removed from PATH so the agent cannot accidentally use it.
+
+The runner finds the mdedit binary by trying multiple candidate paths in order: the project's cargo build output, `~/.cargo/bin/mdedit`, and finally `which mdedit` as a fallback.
 
 ### Placeholder Substitution
 
@@ -263,7 +267,7 @@ Reused from v1 without changes:
 
 Default configuration: 4 scenarios x 3 sizes x 2 conditions x 3 reps = 72 runs (minus replace-large/small = 66 runs).
 
-At ~30s per agent and 5 parallel workers, a full run takes ~7 minutes. Estimated cost at Haiku rates: ~$0.50–1.00.
+At ~30s per agent and 15 parallel workers, a full run takes ~2 minutes. Estimated cost at Haiku rates: ~$0.50–1.00.
 
 ## Adding a New Scenario
 
