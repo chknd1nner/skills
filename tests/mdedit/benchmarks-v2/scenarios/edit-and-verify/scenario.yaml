@@ -1,0 +1,5 @@
+name: edit-and-verify
+description: Edit a section and verify the change by reading back
+sizes: [small, medium, large]
+validation: report-contains
+showcase: true

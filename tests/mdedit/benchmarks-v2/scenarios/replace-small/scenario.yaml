@@ -1,0 +1,5 @@
+name: replace-small
+description: Replace a small section (~5 lines) with new content
+sizes: [small, medium, large]
+validation: file-diff
+showcase: false

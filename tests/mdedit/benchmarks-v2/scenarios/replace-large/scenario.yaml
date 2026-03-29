@@ -1,0 +1,5 @@
+name: replace-large
+description: Replace a large section (40+ lines) with new content
+sizes: [medium, large]
+validation: file-diff
+showcase: true

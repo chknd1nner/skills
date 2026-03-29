@@ -1,0 +1,5 @@
+name: delete-section
+description: Delete a section and all its content
+sizes: [small, medium, large]
+validation: file-diff
+showcase: false
