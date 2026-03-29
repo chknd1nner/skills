@@ -159,8 +159,9 @@ def parse_token_usage(stdout: str) -> dict:
     """
     Parse token usage from claude CLI JSON output.
 
-    Scans the JSON structure for input_tokens/output_tokens and counts
-    tool_use blocks.
+    The claude CLI with --output-format json returns a JSON array where
+    the last item (type="result") contains the canonical usage data.
+    Input tokens include cache tokens (creation + read) for the full picture.
     """
     try:
         data = json.loads(stdout.strip())
@@ -173,47 +174,37 @@ def parse_token_usage(stdout: str) -> dict:
     input_tokens = 0
     output_tokens = 0
     num_tool_calls = 0
+    usage = None
 
-    # Try known locations
-    for path in [lambda d: d['result']['usage'], lambda d: d['usage']]:
-        try:
-            usage = path(data)
-            if isinstance(usage, dict):
-                input_tokens = usage.get('input_tokens', 0) or 0
-                output_tokens = usage.get('output_tokens', 0) or 0
+    # The JSON is a list of events — find the "result" item
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict) and item.get('type') == 'result':
+                usage = item.get('usage', {})
                 break
-        except (KeyError, TypeError):
+    elif isinstance(data, dict):
+        # Single object: try known paths
+        usage = data.get('usage') or (data.get('result') or {}).get('usage')
+
+    if isinstance(usage, dict):
+        # Use non-cached token counts only. Cache tokens are dominated by
+        # Claude Code system prompt overhead which is identical for both
+        # conditions and would obscure the actual task-level difference.
+        input_tokens = usage.get('input_tokens', 0) or 0
+        output_tokens = usage.get('output_tokens', 0) or 0
+
+    # Count tool_use blocks from assistant messages
+    items = data if isinstance(data, list) else [data]
+    for item in items:
+        if not isinstance(item, dict) or item.get('type') != 'assistant':
             continue
-
-    # Fallback: scan the whole structure
-    if input_tokens == 0 and output_tokens == 0:
-        def _scan(obj):
-            nonlocal input_tokens, output_tokens
-            if isinstance(obj, dict):
-                if 'input_tokens' in obj and input_tokens == 0:
-                    input_tokens = obj['input_tokens'] or 0
-                if 'output_tokens' in obj and output_tokens == 0:
-                    output_tokens = obj['output_tokens'] or 0
-                for v in obj.values():
-                    _scan(v)
-            elif isinstance(obj, list):
-                for item in obj:
-                    _scan(item)
-        _scan(data)
-
-    # Count tool_use blocks
-    try:
-        messages = data.get('messages') or []
-        for msg in messages:
-            if isinstance(msg, dict):
-                content = msg.get('content') or []
-                if isinstance(content, list):
-                    num_tool_calls += sum(
-                        1 for b in content
-                        if isinstance(b, dict) and b.get('type') == 'tool_use'
-                    )
-    except Exception:
-        pass
+        message = item.get('message', item)
+        content = message.get('content') or []
+        if isinstance(content, list):
+            num_tool_calls += sum(
+                1 for b in content
+                if isinstance(b, dict) and b.get('type') == 'tool_use'
+            )
 
     return {
         'input_tokens': input_tokens,
@@ -266,17 +257,22 @@ def run_single(
     )
 
     # Build command
+    # Note: --bare strips auth context and fails inside Claude Code sessions.
+    # Instead we use CLAUDECODE="" + CLAUDE_CODE_TMPDIR + cwd to /tmp workdir
+    # to isolate from parent session config while preserving auth.
     cmd = [
         'claude', '-p',
         '--output-format', 'json',
-        '--bare',
         '--system-prompt', system_prompt,
         '--model', model,
         '--dangerously-skip-permissions',
+        '--no-chrome',
     ]
 
-    # Build environment
+    # Build environment: isolate from parent Claude Code session
     env = os.environ.copy()
+    env['CLAUDECODE'] = ''
+    env['CLAUDE_CODE_TMPDIR'] = str(workdir / '.claude-tmp')
     if binary:
         binary_dir = str(binary.parent)
         if condition == 'mdedit':

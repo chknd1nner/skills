@@ -164,7 +164,12 @@ def _extract_tool_calls(transcript_json: str) -> list[dict]:
         return []
 
     calls = []
-    messages = data.get('messages') or []
+    # JSON can be a list of events or a single object
+    items = data if isinstance(data, list) else [data]
+    messages = []
+    for item in items:
+        if isinstance(item, dict) and item.get('type') == 'assistant':
+            messages.append(item.get('message', item))
     for msg in messages:
         if not isinstance(msg, dict):
             continue
