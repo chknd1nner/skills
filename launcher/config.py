@@ -24,3 +24,24 @@ def parse_env(path: Optional[str]) -> dict:
                 key, val = line.split('=', 1)
                 env[key.strip()] = val.strip()
     return env
+
+
+def load_state(path: str) -> dict:
+    """Load launcher state from JSON file.
+
+    Returns empty dict if file doesn't exist or is invalid JSON.
+    """
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_state(path: str, state: dict) -> None:
+    """Save launcher state to JSON file."""
+    with open(path, 'w') as f:
+        json.dump(state, f, indent=2)
+        f.write('\n')
