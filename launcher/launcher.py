@@ -78,3 +78,142 @@ def discover_modules(env: dict) -> list:
             continue
 
     return available
+
+
+def build_tui_choices(modules: list, env: dict, saved_state: dict) -> list:
+    all_items = []
+    for mod_info in modules:
+        mod = mod_info["module"]
+        mod_name = mod_info["name"]
+        mod_state = saved_state.get(mod_name.lower().replace(" ", "_"), {})
+
+        if hasattr(mod, "build_tui_section"):
+            items = mod.build_tui_section(env, mod_state)
+            for item in items:
+                item["module_name"] = mod_name
+            all_items.extend(items)
+
+    return all_items
+
+
+def run_tui(all_items: list) -> dict:
+    from InquirerPy import inquirer
+    from InquirerPy.base.control import Choice
+    from InquirerPy.separator import Separator
+
+    choices = []
+    for item in all_items:
+        if item.get("type") == "separator":
+            choices.append(Separator(f"── {item['label']} ──"))
+        else:
+            choices.append(
+                Choice(
+                    value=item["key"],
+                    name=item["label"],
+                    enabled=item.get("default", True),
+                )
+            )
+
+    if not choices:
+        return {}
+
+    selected = inquirer.checkbox(
+        message="Configure launch options (↑↓ navigate, ␣ toggle, ⏎ launch):",
+        choices=choices,
+        instruction="",
+    ).execute()
+
+    all_keys = [item["key"] for item in all_items if item.get("type") != "separator"]
+    return {key: (key in selected) for key in all_keys}
+
+
+def selections_to_module_state(selections: dict, all_items: list) -> dict:
+    module_states = {}
+    for item in all_items:
+        if item.get("type") == "separator":
+            continue
+        mod_key = item["module_name"].lower().replace(" ", "_")
+        if mod_key not in module_states:
+            module_states[mod_key] = {}
+
+        key = item["key"]
+        selected = selections.get(key, item.get("default", True))
+
+        if key == "enabled":
+            module_states[mod_key]["enabled"] = selected
+        elif key.startswith("file:"):
+            if "selected_files" not in module_states[mod_key]:
+                module_states[mod_key]["selected_files"] = {}
+            file_path = key[5:]
+            module_states[mod_key]["selected_files"][file_path] = selected
+        else:
+            module_states[mod_key][key] = selected
+
+    return module_states
+
+
+def main():
+    # Step 1: Config discovery
+    env_path = os.path.join(os.getcwd(), ".env")
+    env = parse_env(env_path)
+
+    # Launcher-level dependency: claude must be on PATH
+    if not shutil.which("claude"):
+        print("Error: 'claude' not found on PATH. Install Claude Code first.")
+        sys.exit(1)
+
+    # Step 2: Module discovery
+    modules = discover_modules(env)
+
+    # Step 3: TUI
+    state_path = os.path.join(os.getcwd(), STATE_FILENAME)
+    saved_state = load_state(state_path)
+
+    all_items = build_tui_choices(modules, env, saved_state)
+    selections = run_tui(all_items)
+
+    if selections is None:
+        sys.exit(0)
+
+    # Step 4: Save selections
+    module_states = selections_to_module_state(selections, all_items)
+    # Merge with existing state to preserve stale module entries
+    merged_state = {**saved_state, **module_states}
+    save_state(state_path, merged_state)
+
+    # Step 5: Build prompt fragments from enabled modules
+    fragments = []
+    for mod_info in modules:
+        mod = mod_info["module"]
+        mod_key = mod_info["name"].lower().replace(" ", "_")
+        mod_state = module_states.get(mod_key, {})
+
+        if not mod_state.get("enabled", False):
+            continue
+
+        if hasattr(mod, "build_prompt"):
+            try:
+                fragment = mod.build_prompt(env, mod_state)
+                if fragment:
+                    fragments.append(fragment)
+            except Exception as e:
+                print(f"Warning: {mod_info['name']} failed to build prompt: {e}")
+
+    # Step 6: Parse user flags
+    args = parse_args(sys.argv[1:])
+
+    # Step 7: Assemble system prompt
+    prompt_path = assemble_prompt(fragments, args["user_appends"])
+
+    # Step 8: Launch claude
+    claude_args = ["claude"]
+    if prompt_path:
+        claude_args.extend(["--append-system-prompt-file", prompt_path])
+    claude_args.extend(args["passthrough"])
+
+    print(f"Launching claude with {len(fragments)} module(s)...")
+    os.execvp("claude", claude_args)
+
+
+if __name__ == "__main__":
+    main()
