@@ -1,5 +1,5 @@
 from unittest.mock import patch, MagicMock
-from launcher.launcher import parse_args
+from launcher.launcher import parse_args, discover_modules
 
 
 class TestParseArgs:
@@ -39,3 +39,24 @@ class TestParseArgs:
             "--append-system-prompt", "Second",
         ])
         assert result["user_appends"] == ["First", "Second"]
+
+
+class TestDiscoverModules:
+    def test_discovers_memory_module(self):
+        env = {"PAT": "ghp_abc", "MEMORY_REPO": "owner/repo"}
+        with patch("shutil.which", return_value="/usr/bin/mdedit"):
+            modules = discover_modules(env)
+        assert len(modules) >= 1
+        names = [m["name"] for m in modules]
+        assert "Memory System" in names
+
+    def test_excludes_module_with_failing_deps(self):
+        env = {}
+        modules = discover_modules(env)
+        names = [m["name"] for m in modules]
+        assert "Memory System" not in names
+
+    def test_returns_empty_list_if_no_modules_pass(self):
+        env = {}
+        modules = discover_modules(env)
+        assert isinstance(modules, list)
