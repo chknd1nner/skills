@@ -50,3 +50,5 @@ venv.bak/
 readwren-profiles/
 .worktrees/
 .claude/settings.local.json
+.claude-launcher-state.json
+.superpowers/
