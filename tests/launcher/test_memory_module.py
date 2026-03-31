@@ -1,6 +1,6 @@
 import shutil
 from unittest.mock import patch, MagicMock
-from launcher.modules.memory.module import check_dependencies, build_tui_section
+from launcher.modules.memory.module import check_dependencies, build_tui_section, build_prompt
 
 
 class TestCheckDependencies:
@@ -118,3 +118,101 @@ class TestBuildTuiSection:
         labels = [i["label"] for i in items if i.get("type") != "separator"]
         assert "self/positions" in labels
         assert "collaborator/profile" in labels
+
+
+SAMPLE_POSITIONS_CONTENT = "# Positions\n\n## Test position\n\n**Position:** Testing.\n"
+SAMPLE_PROFILE_CONTENT = "# Max\n\n## Who they are\n\nTest collaborator.\n"
+SAMPLE_TEMPLATE_CONTENT = "name: positions\nspace: self\n"
+SAMPLE_MANIFEST_CONTENT = "starling:\n  type: person\n  summary: Test entity\n"
+
+
+class TestBuildPrompt:
+    def _make_mock_memory(self):
+        mock = MagicMock()
+        mock.git.repo_name = "owner/test-repo"
+        mock.LOCAL_ROOT = "/tmp/test-repo"
+        mock.config = MagicMock()
+        space_self = MagicMock()
+        space_self.categories = [{"name": "positions", "template": "self-positions.yaml"}]
+        space_collab = MagicMock()
+        space_collab.categories = [{"name": "profile", "template": "collaborator-profile.yaml"}]
+        mock.config.spaces = {
+            "self": space_self, "collaborator": space_collab,
+            "entities": MagicMock(categories=[]),
+        }
+        return mock
+
+    def test_builds_prompt_with_selected_files(self):
+        env = {"PAT": "ghp_abc", "MEMORY_REPO": "owner/repo"}
+        selections = {
+            "enabled": True,
+            "selected_files": {"self/positions": True, "collaborator/profile": True},
+            "templates_enabled": False, "entity_manifest_enabled": False,
+        }
+        mock_memory = self._make_mock_memory()
+        def mock_fetch(path, return_mode='both', branch='working'):
+            if 'positions' in path: return SAMPLE_POSITIONS_CONTENT
+            if 'profile' in path: return SAMPLE_PROFILE_CONTENT
+            return ""
+        mock_memory.fetch.side_effect = mock_fetch
+        mock_memory.status.return_value = {
+            "repo": "owner/test-repo", "dirty_files": [],
+            "recent_log": [{"sha": "abc1234", "message": "test commit", "date": "2026-03-31T10:00:00"}],
+        }
+        mock_memory.git.log = MagicMock(return_value=[MagicMock(date="2026-03-30T10:00:00")])
+        with patch("launcher.modules.memory.module._connect_full", return_value=mock_memory):
+            result = build_prompt(env, selections)
+        assert '<memory file="self/positions"' in result
+        assert '<memory file="collaborator/profile"' in result
+        assert SAMPLE_POSITIONS_CONTENT in result
+        assert SAMPLE_PROFILE_CONTENT in result
+        assert "## Per-response loop" in result
+        assert "## Forbidden phrases" in result
+
+    def test_excludes_unchecked_files(self):
+        env = {"PAT": "ghp_abc", "MEMORY_REPO": "owner/repo"}
+        selections = {
+            "enabled": True,
+            "selected_files": {"self/positions": True, "collaborator/profile": False},
+            "templates_enabled": False, "entity_manifest_enabled": False,
+        }
+        mock_memory = self._make_mock_memory()
+        mock_memory.fetch.return_value = SAMPLE_POSITIONS_CONTENT
+        mock_memory.status.return_value = {"repo": "owner/test-repo", "dirty_files": [], "recent_log": []}
+        mock_memory.git.log = MagicMock(return_value=[MagicMock(date="2026-03-30T10:00:00")])
+        with patch("launcher.modules.memory.module._connect_full", return_value=mock_memory):
+            result = build_prompt(env, selections)
+        assert '<memory file="self/positions"' in result
+        assert '<memory file="collaborator/profile"' not in result
+
+    def test_includes_templates_when_selected(self):
+        env = {"PAT": "ghp_abc", "MEMORY_REPO": "owner/repo"}
+        selections = {
+            "enabled": True, "selected_files": {"self/positions": True},
+            "templates_enabled": True, "entity_manifest_enabled": False,
+        }
+        mock_memory = self._make_mock_memory()
+        mock_memory.fetch.return_value = SAMPLE_POSITIONS_CONTENT
+        mock_memory.get_template.return_value = SAMPLE_TEMPLATE_CONTENT
+        mock_memory.status.return_value = {"repo": "owner/test-repo", "dirty_files": [], "recent_log": []}
+        mock_memory.git.log = MagicMock(return_value=[MagicMock(date="2026-03-30T10:00:00")])
+        with patch("launcher.modules.memory.module._connect_full", return_value=mock_memory):
+            result = build_prompt(env, selections)
+        assert "<memory-template" in result
+
+    def test_includes_manifest_when_selected(self):
+        env = {"PAT": "ghp_abc", "MEMORY_REPO": "owner/repo"}
+        selections = {
+            "enabled": True, "selected_files": {},
+            "templates_enabled": False, "entity_manifest_enabled": True,
+        }
+        mock_memory = self._make_mock_memory()
+        def mock_fetch(path, return_mode='both', branch='working'):
+            if 'manifest' in path: return SAMPLE_MANIFEST_CONTENT
+            return ""
+        mock_memory.fetch.side_effect = mock_fetch
+        mock_memory.status.return_value = {"repo": "owner/test-repo", "dirty_files": [], "recent_log": []}
+        mock_memory.git.log = MagicMock(return_value=[])
+        with patch("launcher.modules.memory.module._connect_full", return_value=mock_memory):
+            result = build_prompt(env, selections)
+        assert "<memory-entity-manifest" in result
