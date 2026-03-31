@@ -14,6 +14,7 @@ from launcher.prompt_builder import assemble_prompt
 MODULES_DIR = Path(__file__).parent / "modules"
 STATE_FILENAME = ".claude-launcher-state.json"
 
+# Flags that the launcher intercepts and merges into the temp file
 INTERCEPT_FLAGS = {
     "--append-system-prompt",
     "--append-system-prompt-file",
@@ -21,6 +22,17 @@ INTERCEPT_FLAGS = {
 
 
 def parse_args(argv: list) -> dict:
+    """Separate intercepted flags from passthrough flags.
+
+    Intercepts --append-system-prompt and --append-system-prompt-file,
+    collects their values as user_appends. Everything else passes through.
+
+    Args:
+        argv: command-line arguments (not including the launcher script itself)
+
+    Returns:
+        dict with 'user_appends' (list[str]) and 'passthrough' (list[str])
+    """
     user_appends = []
     passthrough = []
 
@@ -44,6 +56,16 @@ def parse_args(argv: list) -> dict:
 
 
 def discover_modules(env: dict) -> list:
+    """Scan modules/ directory and return modules whose dependencies are met.
+
+    Each module directory must contain a module.py with check_dependencies().
+
+    Args:
+        env: parsed .env contents
+
+    Returns:
+        list of dicts with 'name', 'module' (imported module object)
+    """
     available = []
 
     if not MODULES_DIR.exists():
@@ -81,6 +103,16 @@ def discover_modules(env: dict) -> list:
 
 
 def build_tui_choices(modules: list, env: dict, saved_state: dict) -> list:
+    """Build the full TUI choice list from all available modules.
+
+    Args:
+        modules: list from discover_modules()
+        env: parsed .env contents
+        saved_state: full state dict from state file
+
+    Returns:
+        list of dicts, each module's TUI items with module_name attached
+    """
     all_items = []
     for mod_info in modules:
         mod = mod_info["module"]
@@ -97,6 +129,16 @@ def build_tui_choices(modules: list, env: dict, saved_state: dict) -> list:
 
 
 def run_tui(all_items: list) -> dict:
+    """Present the TUI and return user selections.
+
+    Uses InquirerPy checkbox with separators for grouped flat list.
+
+    Args:
+        all_items: list of menu item dicts from build_tui_choices()
+
+    Returns:
+        dict mapping item keys to bool (selected or not)
+    """
     from InquirerPy import inquirer
     from InquirerPy.base.control import Choice
     from InquirerPy.separator import Separator
@@ -128,6 +170,15 @@ def run_tui(all_items: list) -> dict:
 
 
 def selections_to_module_state(selections: dict, all_items: list) -> dict:
+    """Convert flat TUI selections back to per-module state dicts.
+
+    Args:
+        selections: flat dict of key -> bool from run_tui()
+        all_items: the items list (with module_name attached)
+
+    Returns:
+        dict keyed by module state name, e.g. {"memory_system": {"enabled": True, ...}}
+    """
     module_states = {}
     for item in all_items:
         if item.get("type") == "separator":
@@ -153,6 +204,7 @@ def selections_to_module_state(selections: dict, all_items: list) -> dict:
 
 
 def main():
+    """Main entry point for the launcher."""
     # Step 1: Config discovery
     env_path = os.path.join(os.getcwd(), ".env")
     env = parse_env(env_path)
