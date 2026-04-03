@@ -6,7 +6,7 @@ A modular TUI launcher for Claude Code that injects system prompt content before
 
 ```bash
 cd /path/to/your/project   # must contain .env with PAT and MEMORY_REPO
-python3 launcher/launcher.py
+python3 -m launcher.launcher
 ```
 
 The launcher presents a checkbox menu. Use arrow keys to navigate, space to toggle, enter to launch.
