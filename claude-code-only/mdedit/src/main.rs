@@ -63,7 +63,7 @@ enum Commands {
     Replace {
         file: String,
         section: String,
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         content: Option<String>,
         #[arg(long)]
         from_file: Option<String>,
@@ -76,7 +76,7 @@ enum Commands {
     Append {
         file: String,
         section: String,
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         content: Option<String>,
         #[arg(long)]
         from_file: Option<String>,
@@ -87,7 +87,7 @@ enum Commands {
     Prepend {
         file: String,
         section: String,
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         content: Option<String>,
         #[arg(long)]
         from_file: Option<String>,
@@ -103,7 +103,7 @@ enum Commands {
         before: Option<String>,
         #[arg(long, required = true)]
         heading: String,
-        #[arg(long)]
+        #[arg(long, allow_hyphen_values = true)]
         content: Option<String>,
         #[arg(long)]
         from_file: Option<String>,
@@ -155,8 +155,35 @@ enum FrontmatterAction {
     },
 }
 
+/// Transform `--flag --` into `--flag=--` before clap parses args.
+///
+/// Clap treats a bare `--` as the end-of-options sentinel regardless of
+/// `allow_hyphen_values`. Merging it with the preceding flag via `=`
+/// forces clap to treat it as a value, not a sentinel.
+fn preprocess_args(args: Vec<String>) -> Vec<String> {
+    const VALUE_FLAGS: &[&str] = &[
+        "--content", "--heading", "--from-file",
+        "--after", "--before", "--to-file",
+    ];
+    let mut out = Vec::with_capacity(args.len());
+    let mut i = 0;
+    while i < args.len() {
+        if VALUE_FLAGS.contains(&args[i].as_str())
+            && i + 1 < args.len()
+            && args[i + 1] == "--"
+        {
+            out.push(format!("{}=--", args[i]));
+            i += 2;
+        } else {
+            out.push(args[i].clone());
+            i += 1;
+        }
+    }
+    out
+}
+
 fn main() {
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(preprocess_args(std::env::args().collect()));
 
     let result: Result<(), error::MdeditError> = match cli.command {
         Commands::Outline { file, max_depth } => {
