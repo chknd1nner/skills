@@ -308,3 +308,64 @@ def test_bypass_flag_not_triggered_by_substring():
     assert result.returncode == 0
     # This SHOULD be intercepted (bypass only works as prefix)
     # Until dispatch is wired, we can't distinguish — just verify no crash
+
+
+# ---------------------------------------------------------------------------
+# File helpers (tested via import, not subprocess)
+# ---------------------------------------------------------------------------
+
+# Import the hook module for unit testing internal functions
+import importlib.util
+_spec = importlib.util.spec_from_file_location('hook', SCRIPT)
+_hook = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_hook)
+
+
+def test_tasks_dir_path():
+    assert _hook.tasks_dir('/project') == '/project/.opencode/tasks'
+
+
+def test_write_status_creates_directory(tmp_path):
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'abc123', 'PENDING')
+    status_file = tmp_path / 'project' / '.opencode' / 'tasks' / 'abc123.status'
+    assert status_file.exists()
+    assert status_file.read_text() == 'PENDING'
+
+
+def test_write_status_overwrites(tmp_path):
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'abc123', 'PENDING')
+    _hook.write_status(cwd, 'abc123', 'COMPLETE')
+    status_file = tmp_path / 'project' / '.opencode' / 'tasks' / 'abc123.status'
+    assert status_file.read_text() == 'COMPLETE'
+
+
+def test_write_result_creates_file(tmp_path):
+    cwd = str(tmp_path / 'project')
+    _hook.write_result(cwd, 'abc123', '## Review\n\nLooks good.')
+    result_file = tmp_path / 'project' / '.opencode' / 'tasks' / 'abc123.result.md'
+    assert result_file.exists()
+    assert '## Review' in result_file.read_text()
+
+
+def test_read_status_returns_content(tmp_path):
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'abc123', 'COMPLETE')
+    assert _hook.read_status(cwd, 'abc123') == 'COMPLETE'
+
+
+def test_read_status_missing_file(tmp_path):
+    cwd = str(tmp_path / 'project')
+    assert _hook.read_status(cwd, 'nonexistent') == ''
+
+
+def test_append_progress_creates_and_appends(tmp_path):
+    cwd = str(tmp_path / 'project')
+    _hook.append_progress(cwd, 'abc123', 'token one')
+    _hook.append_progress(cwd, 'abc123', 'token two')
+    progress_file = tmp_path / 'project' / '.opencode' / 'tasks' / 'abc123.progress.md'
+    assert progress_file.exists()
+    content = progress_file.read_text()
+    assert 'token one' in content
+    assert 'token two' in content

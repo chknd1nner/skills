@@ -68,6 +68,47 @@ def is_review_call(subagent_type: str, description: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# File helpers
+# ---------------------------------------------------------------------------
+def tasks_dir(cwd: str) -> str:
+    """Path to .opencode/tasks/ under the project root."""
+    return os.path.join(cwd, '.opencode', 'tasks')
+
+
+def write_status(cwd: str, task_id: str, status: str) -> None:
+    """Write status string to {task_id}.status file."""
+    d = tasks_dir(cwd)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, f'{task_id}.status'), 'w') as f:
+        f.write(status)
+
+
+def read_status(cwd: str, task_id: str) -> str:
+    """Read status file, return empty string if missing."""
+    try:
+        with open(os.path.join(tasks_dir(cwd), f'{task_id}.status')) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return ''
+
+
+def write_result(cwd: str, task_id: str, content: str) -> None:
+    """Write review content to {task_id}.result.md file."""
+    d = tasks_dir(cwd)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, f'{task_id}.result.md'), 'w') as f:
+        f.write(content)
+
+
+def append_progress(cwd: str, task_id: str, line: str) -> None:
+    """Append a line to {task_id}.progress.md (create if absent)."""
+    d = tasks_dir(cwd)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, f'{task_id}.progress.md'), 'a') as f:
+        f.write(line)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main() -> None:
