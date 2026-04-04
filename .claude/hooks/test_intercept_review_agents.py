@@ -488,3 +488,22 @@ def test_start_server_nonexistent_log_dir(fake_opencode_binary, tmp_path, monkey
     assert ok is False
     assert 'not found on PATH' not in err
     assert os.path.isdir(str(tmp_path / 'logs'))
+
+
+# ---------------------------------------------------------------------------
+# HTTP dispatch
+# ---------------------------------------------------------------------------
+
+def test_create_session_returns_id(fake_opencode):
+    """POST /session returns session ID from the 'id' field."""
+    server = fake_opencode(session_id='test-session-789')
+    session_id = _hook.create_session(server.port)
+    assert session_id == 'test-session-789'
+    session_reqs = [r for r in server.requests if r['path'] == '/session' and r['method'] == 'POST']
+    assert len(session_reqs) == 1
+
+
+def test_create_session_server_down():
+    """create_session returns None when server is unreachable."""
+    session_id = _hook.create_session(19999)
+    assert session_id is None

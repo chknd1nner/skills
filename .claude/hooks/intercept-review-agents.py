@@ -186,6 +186,24 @@ def ensure_server(port: int, startup_timeout: int, password: str | None = None, 
 
 
 # ---------------------------------------------------------------------------
+# HTTP dispatch
+# ---------------------------------------------------------------------------
+def create_session(port: int, password: str | None = None) -> str | None:
+    """POST /session → session_id, or None on failure."""
+    url = f'http://127.0.0.1:{port}/session'
+    data = json.dumps({}).encode()
+    req = Request(url, data=data, headers={'Content-Type': 'application/json'})
+    if password:
+        req.add_header('Authorization', f'Bearer {password}')
+    try:
+        with urlopen(req, timeout=5) as resp:
+            body = json.loads(resp.read())
+            return body.get('id')
+    except (URLError, OSError, json.JSONDecodeError):
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main() -> None:
