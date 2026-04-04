@@ -746,3 +746,87 @@ def test_background_prompt_not_accepted(fake_opencode, tmp_path):
 
     status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-6.status').read_text()
     assert status.strip() == 'FAILED'
+
+
+# ---------------------------------------------------------------------------
+# Logging and configuration
+# ---------------------------------------------------------------------------
+
+def test_debug_logging_writes_to_file(fake_opencode, tmp_path):
+    """OPENCODE_DEBUG=1 writes log entries to OPENCODE_LOG_FILE."""
+    server = fake_opencode(session_id='sess-log', prompt_accepted=True)
+    cwd = str(tmp_path / 'project')
+    log_file = str(tmp_path / 'hook-test.log')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer', cwd=cwd),
+        env={
+            'OPENCODE_PORT': str(server.port),
+            'OPENCODE_STARTUP_TIMEOUT': '2',
+            'OPENCODE_DEBUG': '1',
+            'OPENCODE_LOG_FILE': log_file,
+            'OPENCODE_SKIP_POLLER': '1',
+        },
+    )
+    assert result.returncode == 0
+    import pathlib
+    log_content = pathlib.Path(log_file).read_text()
+    assert 'intercepted' in log_content
+    assert 'dispatched' in log_content
+
+
+def test_invalid_port_uses_default():
+    """Non-integer OPENCODE_PORT doesn't crash the hook."""
+    result = run_hook(
+        make_payload('superpowers:code-reviewer'),
+        env={
+            'OPENCODE_PORT': 'not-a-number',
+            'OPENCODE_STARTUP_TIMEOUT': '1',
+            'PATH': '/nonexistent',
+        },
+    )
+    # Should not crash — either dispatches or falls back
+    assert result.returncode == 0
+
+
+def test_model_override_included_in_prompt(fake_opencode, tmp_path):
+    """OPENCODE_MODEL env var appears as modelID in the background process POST body."""
+    server = fake_opencode(session_id='sess-model', result_text='## Review\n\nLooks good.')
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'model-test', 'PENDING')
+    import pathlib
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'model-test.prompt').write_text('Review this.')
+
+    result = run_poller(
+        session_id='sess-model',
+        task_id='model-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': 'gemini-2.5-pro'},
+    )
+    assert result.returncode == 0
+    # Verify modelID was sent in the POST body
+    msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
+    assert len(msg_reqs) == 1
+    assert msg_reqs[0]['body']['modelID'] == 'gemini-2.5-pro'
+    parts = msg_reqs[0]['body']['parts']
+    assert any(p['type'] == 'text' and p['text'] for p in parts)
+
+
+def test_prompt_without_model_override(fake_opencode, tmp_path):
+    """Without OPENCODE_MODEL, POST body has no modelID field."""
+    server = fake_opencode(session_id='sess-nomodel', result_text='## Review\n\nLooks good.')
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'nomodel-test', 'PENDING')
+    import pathlib
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'nomodel-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-nomodel',
+        task_id='nomodel-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+    )
+    msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
+    assert len(msg_reqs) == 1
+    assert 'modelID' not in msg_reqs[0]['body']
