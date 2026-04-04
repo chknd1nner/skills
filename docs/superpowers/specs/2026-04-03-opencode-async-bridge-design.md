@@ -53,6 +53,7 @@ A detached subprocess of the hook (same file, `--poll` flag) that does two thing
 
 File-based handshake mechanism under `.opencode/tasks/` in the project root:
 - `{task_id}.status` — `PENDING`, `COMPLETE`, or `FAILED`
+- `{task_id}.prompt` — the review prompt text (written by hook, read by poller as IPC)
 - `{task_id}.result.md` — the review content (written when POST returns)
 - `{task_id}.progress.md` — real-time transcript of agent work: token stream and tool calls (written continuously by SSE thread)
 
@@ -146,7 +147,7 @@ The `cwd` argument is passed so the background process knows where to write `.op
 
 ### 3. Return Deny
 
-The hook creates `.opencode/tasks/` if needed, writes `{task_id}.status` → `PENDING`, then prints the deny JSON and exits.
+The hook creates `.opencode/tasks/` if needed, writes `{task_id}.prompt` (the review prompt text for the poller to read) and `{task_id}.status` → `PENDING`, then prints the deny JSON and exits.
 
 **Total hook runtime: under 1 second.**
 
@@ -296,6 +297,7 @@ The detection logic is hardcoded for reviews only in v2. The dispatch function i
 
 .opencode/tasks/                   # gitignored, created on first dispatch
   {task_id}.status                 # PENDING | COMPLETE | FAILED
+  {task_id}.prompt                 # review prompt text (hook → poller IPC)
   {task_id}.result.md              # review content (written on POST completion)
   {task_id}.progress.md            # real-time transcript: token stream + tool calls
 ```

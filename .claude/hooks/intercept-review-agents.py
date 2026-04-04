@@ -412,11 +412,13 @@ def main() -> None:
 
     # Spawn background process (skip in tests via OPENCODE_SKIP_POLLER=1)
     if os.environ.get('OPENCODE_SKIP_POLLER', '0') != '1':
+        log_file = os.environ.get('OPENCODE_LOG_FILE', '/tmp/opencode-hook-debug.log')
+        poller_stderr = open(log_file, 'a') if _DEBUG else subprocess.DEVNULL
         subprocess.Popen(
             [sys.executable, __file__, '--poll', session_id, task_id, str(port), cwd],
             start_new_session=True,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=poller_stderr,
         )
 
     # Build and return deny response
