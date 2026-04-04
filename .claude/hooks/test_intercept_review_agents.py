@@ -390,3 +390,101 @@ def test_health_check_server_error(fake_opencode):
     """health_check returns False when server returns 503."""
     server = fake_opencode(health_ok=False)
     assert _hook.health_check(server.port) is False
+
+
+# ---------------------------------------------------------------------------
+# Server startup
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def fake_opencode_binary(tmp_path):
+    """
+    Factory: creates a fake 'opencode' binary that behaves predictably.
+
+    Usage:
+        bin_env = fake_opencode_binary(mode='healthy', port=server.port)
+        # bin_env is a PATH string with the fake binary directory prepended
+    """
+    def _make(mode='healthy', port=None, exit_code=0, stderr_msg=''):
+        script = tmp_path / 'opencode'
+        if mode == 'healthy':
+            # Start a tiny Python HTTP server on the requested port
+            body = f'''#!/usr/bin/env bash
+python3 -c "
+import http.server, threading, time, sys
+port = int(sys.argv[sys.argv.index('--port') + 1]) if '--port' in sys.argv else 4096
+server = http.server.HTTPServer(('127.0.0.1', port), http.server.BaseHTTPRequestHandler)
+threading.Thread(target=server.serve_forever, daemon=True).start()
+time.sleep(300)  # keep alive
+" "$@" &
+'''
+        elif mode == 'fail':
+            body = f'#!/usr/bin/env bash\necho "{stderr_msg}" >&2\nexit {exit_code}\n'
+        elif mode == 'hang':
+            body = '#!/usr/bin/env bash\nsleep 999\n'
+        else:
+            body = f'#!/usr/bin/env bash\nexit {exit_code}\n'
+        script.write_text(body)
+        script.chmod(
+            stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
+        )
+        return f'{tmp_path}:{os.environ.get("PATH", "")}'
+
+    return _make
+
+
+def test_ensure_server_already_running(fake_opencode):
+    """If server is already healthy, ensure_server returns immediately."""
+    server = fake_opencode(health_ok=True)
+    ok, err = _hook.ensure_server(server.port, startup_timeout=2)
+    assert ok is True
+    assert err == ''
+
+
+def test_start_server_binary_not_found():
+    """Missing opencode binary → returns failure."""
+    ok, err = _hook.start_server(19999, startup_timeout=2, path_override='/nonexistent')
+    assert ok is False
+    assert 'not found' in err.lower() or 'No such file' in err.lower()
+
+
+def test_start_server_exits_immediately_with_error(fake_opencode_binary, tmp_path, monkeypatch):
+    """opencode exits with error → fail fast with error from log file."""
+    log_file = str(tmp_path / 'startup-test.log')
+    monkeypatch.setenv('OPENCODE_LOG_FILE', log_file)
+    bin_path = fake_opencode_binary(mode='fail', exit_code=1, stderr_msg='Not authenticated')
+    ok, err = _hook.start_server(19999, startup_timeout=5, path_override=bin_path)
+    assert ok is False
+    assert 'Not authenticated' in err or 'exited' in err.lower()
+
+
+def test_start_server_forwards_password(monkeypatch):
+    """start_server passes password to health_check during the startup polling loop."""
+    calls = []
+
+    def fake_health_check(port, pw=None):
+        calls.append(pw)
+        return True  # succeed immediately
+
+    monkeypatch.setattr(_hook, 'health_check', fake_health_check)
+    monkeypatch.setattr(subprocess, 'Popen', lambda *a, **kw: type('P', (), {'poll': lambda s: None})())
+
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.log', delete=False) as f:
+        log = f.name
+    monkeypatch.setenv('OPENCODE_LOG_FILE', log)
+
+    ok, _ = _hook.start_server(19999, startup_timeout=5, password='s3cr3t')
+    assert ok is True
+    assert calls and calls[0] == 's3cr3t'
+
+
+def test_start_server_nonexistent_log_dir(fake_opencode_binary, tmp_path, monkeypatch):
+    """OPENCODE_LOG_FILE under missing parent dir → dir created, no misleading 'not found on PATH' error."""
+    log_file = str(tmp_path / 'logs' / 'opencode.log')
+    monkeypatch.setenv('OPENCODE_LOG_FILE', log_file)
+    bin_path = fake_opencode_binary(mode='fail', exit_code=1, stderr_msg='startup failed')
+    ok, err = _hook.start_server(19999, startup_timeout=5, path_override=bin_path)
+    assert ok is False
+    assert 'not found on PATH' not in err
+    assert os.path.isdir(str(tmp_path / 'logs'))

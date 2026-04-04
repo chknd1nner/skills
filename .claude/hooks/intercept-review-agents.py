@@ -126,6 +126,65 @@ def health_check(port: int, password: str | None = None) -> bool:
         return False
 
 
+def start_server(port: int, startup_timeout: int, password: str | None = None, path_override: str | None = None) -> tuple[bool, str]:
+    """
+    Start opencode serve and wait until healthy or failure.
+    Returns (success, error_message).
+
+    Server stderr is redirected to OPENCODE_LOG_FILE (not PIPE) to prevent
+    deadlock — the server is long-lived and PIPE buffers would fill and block it.
+    On early exit, the tail of the log file is read for the error message.
+    """
+    log_file = os.environ.get('OPENCODE_LOG_FILE', '/tmp/opencode-hook-debug.log')
+    env = None
+    if path_override:
+        env = {**os.environ, 'PATH': path_override}
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    try:
+        log_fh = open(log_file, 'a')
+        proc = subprocess.Popen(
+            ['opencode', 'serve', '--port', str(port)],
+            stdout=subprocess.DEVNULL,
+            stderr=log_fh,
+            start_new_session=True,
+            env=env,
+        )
+    except FileNotFoundError:
+        return False, 'opencode not found on PATH'
+
+    deadline = time.monotonic() + startup_timeout
+    while time.monotonic() < deadline:
+        ret = proc.poll()
+        if ret is not None:
+            log_fh.close()
+            # Read tail of log file for error context
+            stderr = ''
+            try:
+                with open(log_file) as f:
+                    lines = f.readlines()
+                stderr = ''.join(lines[-10:]).strip()
+            except OSError:
+                pass
+            return False, f'opencode exited with code {ret}: {stderr}'
+        if health_check(port, password):
+            return True, ''
+        time.sleep(0.5)
+
+    # Timeout — kill the process
+    proc.kill()
+    log_fh.close()
+    return False, f'opencode did not become healthy within {startup_timeout}s'
+
+
+def ensure_server(port: int, startup_timeout: int, password: str | None = None, path_override: str | None = None) -> tuple[bool, str]:
+    """Health check first, start if needed."""
+    if health_check(port, password):
+        return True, ''
+    return start_server(port, startup_timeout, password, path_override)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
