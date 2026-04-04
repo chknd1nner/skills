@@ -1,6 +1,6 @@
 # OpenCode Async Bridge — Design Spec
 
-> **Last updated:** 2026-04-03
+> **Last updated:** 2026-04-04
 > This is a living document. If source code were lost, this spec should be sufficient to recreate it.
 
 ## Overview
@@ -19,9 +19,11 @@ The v1 Gemini review hook works but blocks the main Claude session for 60–120 
 
 ## Approach
 
-A `PreToolUse` hook fires on every `Agent` tool call. Detection logic is identical to v1. When a review call is detected, the hook dispatches the review to OpenCode Server via HTTP, spawns a background poller process, and returns a deny immediately (under 1 second). The poller monitors OpenCode's message API and writes the result to a file when complete. Claude reads the file at a natural breakpoint and continues the workflow.
+A `PreToolUse` hook fires on every `Agent` tool call. Detection logic is identical to v1. When a review call is detected, the hook dispatches the review to OpenCode Server via HTTP, spawns a background poller process, and returns a deny with `permissionDecision: "deny"` — all within under 1 second. The `permissionDecisionReason` field carries instructions back to the calling Claude session: what happened (review dispatched to OpenCode), where the result will appear (file paths), and what to do on failure (retry with bypass flag). This is the same return channel v1 used to deliver synchronous results, repurposed here to deliver async coordination instructions.
 
-If OpenCode is unavailable or fails, the hook falls through and the original Claude Agent call proceeds.
+The background process sends a blocking POST to OpenCode and concurrently subscribes to OpenCode's SSE event stream, writing a real-time progress transcript as the agent works. When the POST returns, the final result is written to the handshake file. Claude reads the file at a natural breakpoint and continues the workflow.
+
+If OpenCode is unavailable or fails, the hook falls through (exit 0, no output) and the original Claude Agent call proceeds.
 
 ---
 
@@ -40,15 +42,19 @@ Same entry point and detection logic as v1. Instead of shelling out to `gemini`,
 
 Functions within the hook that handle on-demand OpenCode Server startup. The server is a long-running process that persists across hook invocations — startup cost is paid once per working session.
 
-### 3. The Background Poller
+### 3. The Background Process
 
-A detached subprocess of the hook (same file, `--poll` flag) that monitors `GET /session/{id}/message` until the review result appears, then writes it to the handshake files.
+A detached subprocess of the hook (same file, `--poll` flag) that does two things concurrently:
+
+- **Main thread:** sends `POST /session/{id}/message` and blocks until OpenCode returns the completed response (`info.finish == "stop"`). Then writes the result to the handshake files.
+- **SSE thread:** subscribes to `GET /global/event` and streams token deltas and tool call events to the progress transcript file. Terminates when the main thread exits.
 
 ### 4. The Result Files
 
 File-based handshake mechanism under `.opencode/tasks/` in the project root:
 - `{task_id}.status` — `PENDING`, `COMPLETE`, or `FAILED`
-- `{task_id}.result.md` — the review content (written by poller on completion)
+- `{task_id}.result.md` — the review content (written when POST returns)
+- `{task_id}.progress.md` — real-time transcript of agent work: token stream and tool calls (written continuously by SSE thread)
 
 ---
 
@@ -71,32 +77,39 @@ The bypass check is the very first thing in the hook, before detection or server
 
 ### Discovery
 
-On each invocation, the hook tries `GET http://127.0.0.1:{port}/` as a health check. If it gets a response, the server is ready. Port is configurable via `OPENCODE_PORT` (default `4096`).
+On each invocation, the hook tries `GET http://127.0.0.1:{port}/global/health` as a health check. Returns `{"healthy": true, "version": "..."}` when ready. Port is configurable via `OPENCODE_PORT` (default `4096`).
 
 ### On-Demand Startup
 
 If the health check fails (connection refused), the hook starts OpenCode:
 
 ```python
+log_fh = open(log_file, 'a')
 proc = subprocess.Popen(
     ['opencode', 'serve', '--port', str(port)],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
+    stdout=subprocess.DEVNULL,
+    stderr=log_fh,
     start_new_session=True,
 )
 ```
 
+Server stderr is redirected to `OPENCODE_LOG_FILE` (not PIPE) to prevent deadlock — the server is a long-lived daemon that outlives the hook, and PIPE buffers would fill and block it. The log file captures both startup errors and ongoing server output.
+
 Then polls in a tight loop (every 0.5s, up to `OPENCODE_STARTUP_TIMEOUT` seconds):
 
-- **Process died?** (`proc.poll() is not None`) — read stderr, surface the error to Claude via the deny reason, fall through to Claude Agent. This catches auth failures, port conflicts, missing binary, and config errors immediately.
+- **Process died?** (`proc.poll() is not None`) — read the tail of the log file for the error message. Log the failure, print a one-line warning to stderr, and fall through to Claude Agent. This catches auth failures, port conflicts, missing binary, and config errors immediately.
 - **Health check passes?** — server is ready, proceed with dispatch.
 - **Timeout without health or exit?** — fall through with a generic "server didn't become healthy" message.
 
 ### Fail Fast
 
-The early-exit detection is critical. If OpenCode can't start (e.g., not authenticated via `opencode auth`), the user sees the error message immediately through Claude rather than waiting for a silent 10-second timeout:
+The early-exit detection is critical. If OpenCode can't start (e.g., not authenticated via `opencode auth`), the hook detects this within milliseconds rather than waiting for a 10-second timeout. The hook falls through silently (exit 0, no output) so the review proceeds via Claude Agent, but **always** logs the error and prints a one-line warning to stderr — regardless of whether debug mode is enabled:
 
-> *"OpenCode Server failed to start: `Not authenticated. Run 'opencode auth' to log in.` Falling back to Claude agent."*
+```
+[stderr] OpenCode hook: server startup failed — Not authenticated. Run 'opencode auth' to log in. Falling back to Claude agent. Details: /tmp/opencode-hook-debug.log
+```
+
+The full error is captured in `OPENCODE_LOG_FILE` for inspection. Debug mode controls verbose per-request logging; startup failures are exceptional events that are always recorded.
 
 ### Persistence
 
@@ -114,25 +127,11 @@ Once the server is healthy, three steps:
 
 ### 1. Create Session
 
-`POST /session` with `{ "title": "review-{task_id}" }`. Returns a session object with an ID. The task ID is generated by the hook — a short UUID.
+`POST /session` with `{}`. Returns a session object — the session ID is in the `id` field. The task ID is generated by the hook — a short UUID.
 
-### 2. Send Prompt Async
+### 2. Spawn Background Process
 
-`POST /session/{id}/prompt_async` with the review prompt as a text part:
-
-```json
-{
-  "parts": [{ "type": "text", "text": "<review prompt>" }]
-}
-```
-
-Returns `204` immediately. The review is now running inside OpenCode.
-
-If `OPENCODE_MODEL` is set, it's included in the request body as `"model"`.
-
-### 3. Spawn Poller
-
-The hook launches itself as a detached subprocess in poller mode:
+The hook launches itself as a detached subprocess in poller mode, passing the session ID and task ID:
 
 ```python
 subprocess.Popen(
@@ -143,9 +142,9 @@ subprocess.Popen(
 )
 ```
 
-The `cwd` argument is passed so the poller knows where to write `.opencode/tasks/` files.
+The `cwd` argument is passed so the background process knows where to write `.opencode/tasks/` files. The background process immediately sends the blocking POST to OpenCode and subscribes to the SSE stream — see **Background Process** section.
 
-### 4. Return Deny
+### 3. Return Deny
 
 The hook creates `.opencode/tasks/` if needed, writes `{task_id}.status` → `PENDING`, then prints the deny JSON and exits.
 
@@ -169,40 +168,68 @@ Claude agent this time.
 
 ### Server startup failure
 
-On startup failure, the hook exits 0 with no output — the original Agent call proceeds (Claude subagent handles the review). The error is logged to `OPENCODE_LOG_FILE` when debug is enabled, and written to stderr. Example error:
+On startup failure, the hook exits 0 with no output — the original Agent call proceeds (Claude subagent handles the review). The error is **always** written to `OPENCODE_LOG_FILE` and a one-line summary is printed to stderr, regardless of debug mode. This ensures the user can always inspect why OpenCode handoff failed and fix it for next time.
 
 ```
-OpenCode Server failed to start: Not authenticated. Run 'opencode auth' to log in.
-Falling back to Claude agent.
+[stderr] OpenCode hook: server startup failed — Not authenticated. Run 'opencode auth' to log in. Falling back to Claude agent. Details: /tmp/opencode-hook-debug.log
 ```
 
 ---
 
-## Background Poller
+## Background Process
 
-### Loop
+The background process runs two concurrent threads from the moment it starts.
 
-Every `OPENCODE_POLL_INTERVAL` seconds (default 3), hit `GET /session/{session_id}/message`. Parse the JSON response — an array of `{ info, parts }` objects. Look for an assistant message (the model's reply). If found, extract the text content from the parts.
+### Main Thread: Blocking POST
+
+Sends `POST /session/{session_id}/message` with the review prompt:
+
+```json
+{
+  "parts": [{ "type": "text", "text": "<review prompt>" }]
+}
+```
+
+If `OPENCODE_MODEL` is set, it's included as `"modelID"`.
+
+This call blocks until OpenCode finishes — including all internal tool calls the agent makes. The response is a single `{ info, parts }` object representing the final assistant message. Completion is confirmed by `response["info"]["finish"] == "stop"`. No polling loop required.
+
+The timeout for this call is `OPENCODE_TIMEOUT` (default 300s). If the call exceeds the timeout, write `FAILED` to the status file and exit.
+
+### SSE Thread: Progress Transcript
+
+Concurrently with the blocking POST, subscribes to `GET /global/event` (OpenCode's SSE stream) and writes a running transcript to `{task_id}.progress.md`, filtered to the active `sessionID`.
+
+Two event types are captured:
+
+- **`message.part.delta`** — raw token string in `properties.delta`. Appended directly to the transcript to form the streaming text as the model generates it.
+- **`message.part.updated`** with `part.type == "tool"` — tool call lifecycle. Written as a structured entry when `part.state.status == "completed"`:
+
+```
+[TOOL: read] /path/to/file.md
+[TOOL: bash] ls -la
+```
+
+The SSE thread writes to the progress file append-only as events arrive — if the process crashes mid-review, the partial transcript is preserved. The thread terminates when the main thread exits (the SSE connection is closed).
 
 ### Write Result
 
-Write extracted text to `.opencode/tasks/{task_id}.result.md`. Update `.opencode/tasks/{task_id}.status` → `COMPLETE`. Exit.
+When the blocking POST returns with `finish == "stop"`:
 
-### Timeout
-
-Controlled by `OPENCODE_TIMEOUT` (default 300s). Reviews can run longer than v1's 120s since the main session isn't blocked. If the timeout fires before a result appears, write `FAILED` to the status file and exit.
+1. Extract all `parts` where `type == "text"` and join them.
+2. Write to `.opencode/tasks/{task_id}.result.md`.
+3. Write `COMPLETE` to `.opencode/tasks/{task_id}.status`.
+4. Exit (SSE thread terminates as the process exits).
 
 ### Error Handling
 
-If any HTTP request fails (server crashed, network error), write `FAILED` to the status file and exit. No retry loop — if OpenCode died mid-review, there's nothing to retry against.
+If the POST fails (HTTP error, server crashed, timeout), write `FAILED` to the status file and exit. No retry — if OpenCode died mid-review, there's nothing to retry against. The partial progress transcript (if any) is preserved for inspection.
+
+If `finish` is anything other than `"stop"` (e.g., a future error state), treat it as `FAILED`.
 
 ### Cleanup
 
-The poller doesn't delete anything. Result files accumulate in `.opencode/tasks/`. They're small text files and serve as an audit trail. The directory should be gitignored.
-
-### Logging
-
-When `OPENCODE_DEBUG=1`, the poller appends to `OPENCODE_LOG_FILE`. Each poll cycle logs the HTTP status and whether a result was found.
+The background process doesn't delete anything. Files accumulate in `.opencode/tasks/`. They serve as an audit trail — Claude Code can read the progress transcript to understand what the agent did. The directory should be gitignored.
 
 ---
 
@@ -241,13 +268,13 @@ Environment variables, settable in `settings.local.json` under `"env"`:
 | Variable | Default | Description |
 |---|---|---|
 | `OPENCODE_PORT` | `4096` | Port for OpenCode Server |
-| `OPENCODE_TIMEOUT` | `300` | Seconds before poller writes FAILED |
+| `OPENCODE_TIMEOUT` | `300` | Seconds before background process write FAILED (HTTP request timeout) |
 | `OPENCODE_STARTUP_TIMEOUT` | `10` | Seconds to wait for server health on startup |
-| `OPENCODE_POLL_INTERVAL` | `3` | Seconds between polling attempts |
 | `OPENCODE_DEBUG` | `0` | Enable debug logging |
 | `OPENCODE_LOG_FILE` | `/tmp/opencode-hook-debug.log` | Log file path |
-| `OPENCODE_MODEL` | *(none)* | Override model for reviews (passed to OpenCode prompt API) |
+| `OPENCODE_MODEL` | *(none)* | Override model (passed as `modelID` in prompt request) |
 | `OPENCODE_SERVER_PASSWORD` | *(none)* | Auth password if configured |
+| `OPENCODE_SKIP_POLLER` | `0` | Test-only: suppress background process spawning |
 
 ---
 
@@ -269,7 +296,8 @@ The detection logic is hardcoded for reviews only in v2. The dispatch function i
 
 .opencode/tasks/                   # gitignored, created on first dispatch
   {task_id}.status                 # PENDING | COMPLETE | FAILED
-  {task_id}.result.md              # review content
+  {task_id}.result.md              # review content (written on POST completion)
+  {task_id}.progress.md            # real-time transcript: token stream + tool calls
 ```
 
 ---
@@ -304,16 +332,22 @@ pytest, using a fake OpenCode server fixture.
 
 ### Fake OpenCode Server
 
-A `fake_opencode` pytest fixture that spins up a minimal `http.server` on a random port with configurable responses per endpoint. Accepts a `delay` parameter to simulate realistic timing — slow startup (2–3s), review processing time (5–10s for the message endpoint to return a result), and timeouts (delay exceeding the configured limit). This ensures the polling loop actually loops and the timeout path actually fires.
+A `fake_opencode` pytest fixture that spins up a minimal `http.server` on a random port with configurable responses per endpoint:
+
+- `POST /session` → returns a session JSON with an `id` field.
+- `POST /session/{id}/message` → blocks for `delay` seconds (simulating review time), then returns `{"info": {"finish": "stop", "time": {"created": ..., "completed": ...}, ...}, "parts": [...]}`.
+- `GET /global/event` → SSE stream that emits a configurable sequence of `message.part.delta` and `message.part.updated` events then closes.
+
+The `delay` parameter drives meaningful test scenarios: slow startup (2–3s), realistic review time (5–10s), and timeout cases (delay exceeding `OPENCODE_TIMEOUT`).
 
 ### Test Groups
 
 | Group | Tests | What's Covered |
 |---|---|---|
 | Detection | ~7 | Pass-through cases, both interception patterns, bypass flag, case-insensitivity |
-| Server lifecycle | ~5 | Health check success, on-demand startup, startup failure with stderr capture, startup timeout, fail-fast on early exit |
-| Dispatch | ~4 | Session creation, async prompt, poller subprocess spawned, deny JSON structure |
-| Poller | ~5 | Result extraction from message API, status file transitions (PENDING → COMPLETE), timeout → FAILED, HTTP error → FAILED, realistic delays |
+| Server lifecycle | ~5 | Health check success (`/global/health`), on-demand startup, startup failure with stderr capture, startup timeout, fail-fast on early exit |
+| Dispatch | ~4 | Session creation, background process spawned, deny JSON structure, status file initialised to PENDING |
+| Background process | ~6 | Blocking POST → result written on `finish=stop`, status transitions PENDING → COMPLETE, timeout → FAILED, HTTP error → FAILED, SSE deltas written to progress file, tool calls written to progress file |
 | Fallback | ~3 | OpenCode binary not found, server unreachable after startup, all paths fall through to Claude Agent |
 | Bypass | ~2 | `[BYPASS_HOOK]` in description passes through, normal descriptions still intercepted |
 
@@ -341,18 +375,23 @@ v1's `gemini-review-policy.toml` is retained but unused. It can be removed later
 
 ## Out of Scope
 
-- **SSE event-driven polling** — OpenCode exposes SSE events, but the event types beyond `server.connected` are not well-documented. Polling is sufficient and simpler. Can revisit if the event API matures.
-- **OpenCode TypeScript SDK** — adds a Node.js dependency for marginal benefit. Raw HTTP via urllib is sufficient for the 3 endpoints we use.
+- **OpenCode TypeScript SDK** — adds a Node.js dependency for marginal benefit. Raw HTTP via `urllib` is sufficient for the endpoints we use.
 - **Configurable routing by agent type** — architecture supports it, but v2 ships with reviews-only. Future work.
 - **Synchronous fallback mode** (`OPENCODE_ASYNC=0`) — noted as an escape hatch if Claude's async behaviour is unreliable, but not implemented in v2.
+- **OpenAI-compatible streaming endpoint** — OpenCode does not expose `/v1/chat/completions`. The native SSE stream at `/global/event` is the only streaming mechanism and is what we use.
 
 ---
 
-## Implementation Notes — Verify During Build
+## API Contract — Empirically Verified (2026-04-04)
 
-These details are based on OpenCode's public documentation but need hands-on verification:
+All of the following were confirmed against OpenCode v1.3.13 via live probing.
 
-- **Health check endpoint:** Spec assumes `GET /` works. The OpenAPI spec is at `/doc` — may need to use that or another endpoint. Test empirically.
-- **Message response shape:** The `info` field on each message presumably contains a role or type to distinguish user messages from assistant messages. Verify the exact field name and values.
-- **Session ID field:** Session creation returns a session object — verify the field name for the ID (`id`, `sessionID`, etc.).
-- **Auth header format:** If `OPENCODE_SERVER_PASSWORD` is set, verify whether it's Basic auth, Bearer token, or a custom header.
+- **Health check:** `GET /global/health` returns `{"healthy": true, "version": "1.3.13"}`. `GET /` also works (returns the web UI HTML), but `/global/health` is the correct endpoint.
+- **Session creation:** `POST /session` with `{}` body returns `{"id": "ses_...", "slug": "...", "directory": "...", "title": "...", "time": {...}}`. The session ID field is `id`.
+- **Prompt endpoint:** `POST /session/{id}/message` with `{"parts": [{"type": "text", "text": "..."}]}`. Blocks synchronously until the model finishes — including all internal tool calls. Returns `{"info": {...}, "parts": [...]}`.
+- **Completion signal:** `response["info"]["finish"] == "stop"`. Set only on the terminal message. `info.time.completed` is also set when done (absent while in-progress). Intermediate tool-call messages have `finish == "tool-calls"` and exist only in the session history — the blocking POST returns only the final message.
+- **Text extraction:** Collect `part["text"]` for all `parts` where `part["type"] == "text"`.
+- **Part types observed:** `step-start`, `step-finish`, `text`, `tool`. `step-finish` carries a `reason` field: `"stop"` (normal completion) or `"tool-calls"` (intermediate step, not returned by the POST).
+- **SSE stream:** `GET /global/event` — Server-Sent Events, no auth required on an unsecured server. Each event is `data: {JSON}\n\n`. The JSON has a `payload` object with `type` and `properties` fields. Relevant event types: `message.part.delta` (token chunk in `properties.delta`, a raw string), `message.part.updated` (full part state including tool call input/output), `session.status` (`busy`/`idle`), `session.idle` (fires after POST completes). All events include a `sessionID` in `properties` — filter on this to isolate the active session.
+- **No OpenAI-compatible endpoint:** `/v1/chat/completions`, `/v1/models`, and similar paths do not exist.
+- **Auth header format:** Not yet tested with `OPENCODE_SERVER_PASSWORD`. Assumed to be a standard header — verify during build.
