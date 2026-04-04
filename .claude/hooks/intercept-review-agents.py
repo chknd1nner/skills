@@ -26,6 +26,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from urllib.error import URLError
@@ -235,6 +236,132 @@ def create_session(port: int, password: str | None = None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Background process
+# ---------------------------------------------------------------------------
+
+def _sse_thread(port: int, session_id: str, task_id: str, cwd: str,
+                stop_event: threading.Event, password: str | None = None) -> None:
+    """
+    Subscribe to GET /global/event and write token deltas and tool call events
+    to {task_id}.progress.md. Runs until stop_event is set.
+    """
+    url = f'http://127.0.0.1:{port}/global/event'
+    try:
+        req = Request(url)
+        if password:
+            req.add_header('Authorization', f'Bearer {password}')
+        with urlopen(req, timeout=None) as resp:
+            for raw_line in resp:
+                line = raw_line.decode('utf-8', errors='replace').strip()
+                if not line.startswith('data:'):
+                    continue
+                try:
+                    event = json.loads(line[5:].strip())
+                    payload = event.get('payload', {})
+                    ptype = payload.get('type', '')
+                    props = payload.get('properties', {})
+                    if props.get('sessionID') != session_id:
+                        continue
+                    if ptype == 'message.part.delta':
+                        delta = props.get('delta', '')
+                        if delta:
+                            append_progress(cwd, task_id, delta)
+                    elif ptype == 'message.part.updated':
+                        part = props.get('part', {})
+                        if part.get('type') == 'tool':
+                            state = part.get('state', {})
+                            if state.get('status') == 'completed':
+                                tool = part.get('tool', '?')
+                                inp = state.get('input', {})
+                                # Show primary input path/command
+                                detail = (inp.get('filePath') or inp.get('command')
+                                          or inp.get('pattern') or json.dumps(inp)[:60])
+                                append_progress(cwd, task_id, f'\n[TOOL: {tool}] {detail}\n')
+                except (json.JSONDecodeError, KeyError):
+                    pass
+                if stop_event.is_set():
+                    break
+    except (URLError, OSError):
+        pass  # server gone or stop requested
+
+
+def run_background_process(
+    port: int,
+    session_id: str,
+    task_id: str,
+    cwd: str,
+    timeout: int,
+    model: str | None = None,
+    password: str | None = None,
+) -> None:
+    """
+    Main thread: send blocking POST /session/{id}/message, wait for finish=stop.
+    SSE thread: subscribe to /global/event, write progress transcript.
+    On completion, write result.md and set status to COMPLETE.
+    """
+    # Read prompt from file written by hook
+    prompt_file = os.path.join(tasks_dir(cwd), f'{task_id}.prompt')
+    try:
+        with open(prompt_file) as f:
+            prompt = f.read()
+    except OSError:
+        log(f'bg: prompt file not found | task={task_id}')
+        write_status(cwd, task_id, 'FAILED')
+        return
+
+    # Start SSE thread
+    stop_event = threading.Event()
+    sse = threading.Thread(
+        target=_sse_thread,
+        args=(port, session_id, task_id, cwd, stop_event, password),
+        daemon=True,
+    )
+    sse.start()
+
+    # Send blocking POST
+    url = f'http://127.0.0.1:{port}/session/{session_id}/message'
+    body: dict = {'parts': [{'type': 'text', 'text': prompt}]}
+    if model:
+        body['modelID'] = model
+    data = json.dumps(body).encode()
+    req = Request(url, data=data, headers={'Content-Type': 'application/json'})
+    if password:
+        req.add_header('Authorization', f'Bearer {password}')
+
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            response = json.loads(resp.read())
+    except (URLError, OSError, json.JSONDecodeError) as e:
+        log(f'bg: POST failed | task={task_id} | err={e}')
+        stop_event.set()
+        sse.join(timeout=2)
+        write_status(cwd, task_id, 'FAILED')
+        return
+
+    # Wait for SSE thread to drain naturally (server closes stream); then signal stop
+    sse.join(timeout=5)
+    stop_event.set()
+
+    # Verify terminal state
+    finish = response.get('info', {}).get('finish', '')
+    if finish != 'stop':
+        log(f'bg: unexpected finish={finish!r} | task={task_id}')
+        write_status(cwd, task_id, 'FAILED')
+        return
+
+    # Extract text parts and write result
+    text_parts = [
+        p['text']
+        for p in response.get('parts', [])
+        if p.get('type') == 'text' and p.get('text')
+    ]
+    result_text = '\n\n'.join(text_parts)
+    write_result(cwd, task_id, result_text)
+    write_status(cwd, task_id, 'COMPLETE')
+    log(f'bg: complete | task={task_id} | bytes={len(result_text)}')
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main() -> None:
@@ -317,5 +444,22 @@ def main() -> None:
     print(json.dumps(response))
 
 
+def main_poll(session_id: str, task_id: str, port: int, cwd: str) -> None:
+    """Entry point for --poll mode (background process subprocess)."""
+    timeout = _int_env('OPENCODE_TIMEOUT', 300)
+    model = os.environ.get('OPENCODE_MODEL', '') or None
+    password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
+    run_background_process(port, session_id, task_id, cwd, timeout, model, password)
+
+
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == '--poll':
+        if len(sys.argv) != 6:
+            print(
+                f'Usage: {sys.argv[0]} --poll <session_id> <task_id> <port> <cwd>',
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        main_poll(sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5])
+    else:
+        main()

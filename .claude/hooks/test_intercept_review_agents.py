@@ -606,3 +606,143 @@ def test_hook_bypass_still_works_with_server_running(fake_opencode, tmp_path):
     )
     assert result.returncode == 0
     assert result.stdout == ''
+
+
+# ---------------------------------------------------------------------------
+# Background process
+# ---------------------------------------------------------------------------
+
+def test_background_writes_complete_on_success(fake_opencode, tmp_path):
+    """Blocking POST returns finish=stop → COMPLETE + result file written."""
+    server = fake_opencode(
+        session_id='sess-abc',
+        result_text='## Review\n\nCode looks good. Ready to merge.',
+    )
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'bg-test-1', 'PENDING')
+    # Write the prompt file (normally done by main hook)
+    import pathlib
+    prompt_file = tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-1.prompt'
+    prompt_file.write_text('Review this implementation.')
+
+    result = run_poller(
+        session_id='sess-abc',
+        task_id='bg-test-1',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+    )
+    assert result.returncode == 0
+
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-1.status').read_text()
+    assert status.strip() == 'COMPLETE'
+
+    result_content = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-1.result.md').read_text()
+    assert '## Review' in result_content
+    assert 'Ready to merge' in result_content
+
+
+def test_background_timeout_writes_failed(fake_opencode, tmp_path):
+    """POST takes longer than OPENCODE_TIMEOUT → FAILED."""
+    server = fake_opencode(message_delay=5)  # delay exceeds timeout
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'bg-test-2', 'PENDING')
+    import pathlib
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-2.prompt').write_text('Review this.')
+
+    result = run_poller(
+        session_id='sess-abc',
+        task_id='bg-test-2',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '2'},
+        timeout=15,
+    )
+    assert result.returncode == 0
+
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-2.status').read_text()
+    assert status.strip() == 'FAILED'
+
+
+def test_background_server_crash_writes_failed(tmp_path):
+    """POST can't reach server → FAILED."""
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'bg-test-3', 'PENDING')
+    import pathlib
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-3.prompt').write_text('Review this.')
+
+    result = run_poller(
+        session_id='sess-abc',
+        task_id='bg-test-3',
+        port=19999,  # nothing listening
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '3'},
+        timeout=10,
+    )
+    assert result.returncode == 0
+
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-3.status').read_text()
+    assert status.strip() == 'FAILED'
+
+
+def test_background_extracts_multiple_text_parts(fake_opencode, tmp_path):
+    """Multiple text parts in response are joined in result file."""
+    server = fake_opencode(result_text='## Strengths\n\nClean.\n\n## Issues\n\nMissing error handling.')
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'bg-test-4', 'PENDING')
+    import pathlib
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-4.prompt').write_text('Review this.')
+
+    run_poller(session_id='sess-abc', task_id='bg-test-4', port=server.port,
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '10'})
+
+    result_content = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-4.result.md').read_text()
+    assert 'Clean.' in result_content
+    assert 'Missing error handling' in result_content
+
+
+def test_background_sse_events_written_to_progress(fake_opencode, tmp_path):
+    """SSE delta events are written to the progress transcript file."""
+    sse_events = [
+        {'type': 'message.part.delta',
+         'properties': {'sessionID': 'sess-abc', 'delta': 'This '}},
+        {'type': 'message.part.delta',
+         'properties': {'sessionID': 'sess-abc', 'delta': 'looks good.'}},
+        {'type': 'message.part.updated',
+         'properties': {'sessionID': 'sess-abc',
+                        'part': {'type': 'tool', 'tool': 'read',
+                                 'state': {'status': 'completed',
+                                           'input': {'filePath': '/tmp/test.py'},
+                                           'output': 'content'}}}},
+    ]
+    server = fake_opencode(session_id='sess-abc', result_text='Looks good.', sse_events=sse_events)
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'bg-test-5', 'PENDING')
+    import pathlib
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-5.prompt').write_text('Review this.')
+
+    run_poller(session_id='sess-abc', task_id='bg-test-5', port=server.port,
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '10'})
+
+    progress_file = tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-5.progress.md'
+    assert progress_file.exists()
+    content = progress_file.read_text()
+    assert 'This ' in content
+    assert 'looks good.' in content
+    assert '[TOOL: read]' in content
+    assert '/tmp/test.py' in content
+
+
+def test_background_prompt_not_accepted(fake_opencode, tmp_path):
+    """Server returns error on POST /message → FAILED."""
+    server = fake_opencode(prompt_accepted=False)
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'bg-test-6', 'PENDING')
+    import pathlib
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-6.prompt').write_text('Review this.')
+
+    run_poller(session_id='sess-abc', task_id='bg-test-6', port=server.port,
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '5'})
+
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-6.status').read_text()
+    assert status.strip() == 'FAILED'
