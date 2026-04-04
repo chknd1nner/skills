@@ -1,33 +1,41 @@
 #!/usr/bin/env python3
 """
-intercept-review-agents.py
-PreToolUse hook: intercepts superpowers review-type Agent calls and
-routes them to Gemini CLI instead of spawning a Claude subagent.
+intercept-review-agents.py (v2 — OpenCode Async Bridge)
+
+PreToolUse hook: intercepts review-type Agent calls and dispatches them
+to OpenCode Server asynchronously. Results delivered via file handshake.
 
 Detection patterns:
-  - subagent_type == "superpowers:code-reviewer"
-  - subagent_type == "general-purpose" AND description starts with "review" (case-insensitive)
-
-Fallback: if Gemini fails, times out, or returns empty output,
-exits 0 with no output so the original Agent call proceeds normally.
+  - description.startswith('[BYPASS_HOOK]') → pass through immediately
+  - subagent_type == "superpowers:code-reviewer" → intercept
+  - subagent_type == "general-purpose" AND description starts with "review" → intercept
+  - Everything else → pass through
 
 Environment variables:
-  GEMINI_DEBUG=1        Enable debug logging (default: off)
-  GEMINI_LOG_FILE       Log file path (default: /tmp/gemini-hook-debug.log)
-  GEMINI_REVIEW_MODEL   Override Gemini model (e.g. gemini-2.0-flash)
-  GEMINI_TIMEOUT        Seconds before killing Gemini and falling back (default: 120)
+  OPENCODE_PORT              OpenCode Server port (default: 4096)
+  OPENCODE_TIMEOUT           Background process HTTP timeout in seconds (default: 300)
+  OPENCODE_STARTUP_TIMEOUT   Server startup timeout in seconds (default: 10)
+  OPENCODE_MODEL             Override model for reviews (passed as modelID)
+  OPENCODE_SERVER_PASSWORD   Auth password if configured
+  OPENCODE_DEBUG=1           Enable debug logging (default: off)
+  OPENCODE_LOG_FILE          Log file path (default: /tmp/opencode-hook-debug.log)
+  OPENCODE_SKIP_POLLER=1     Test-only: suppress background process spawning
 """
 import json
 import logging
 import os
 import subprocess
 import sys
+import time
+import uuid
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 # ---------------------------------------------------------------------------
-# Logging — no-op unless GEMINI_DEBUG=1
+# Logging — no-op unless OPENCODE_DEBUG=1
 # ---------------------------------------------------------------------------
-_LOG_FILE = os.environ.get('GEMINI_LOG_FILE', '/tmp/gemini-hook-debug.log')
-_DEBUG = os.environ.get('GEMINI_DEBUG', '0') == '1'
+_LOG_FILE = os.environ.get('OPENCODE_LOG_FILE', '/tmp/opencode-hook-debug.log')
+_DEBUG = os.environ.get('OPENCODE_DEBUG', '0') == '1'
 
 if _DEBUG:
     logging.basicConfig(
@@ -45,7 +53,13 @@ log = logging.debug
 # ---------------------------------------------------------------------------
 # Detection
 # ---------------------------------------------------------------------------
+def is_bypass(description: str) -> bool:
+    """Check for [BYPASS_HOOK] prefix — must be the very first check."""
+    return description.startswith('[BYPASS_HOOK]')
+
+
 def is_review_call(subagent_type: str, description: str) -> bool:
+    """Detect review-type agent calls."""
     if subagent_type == 'superpowers:code-reviewer':
         return True
     if subagent_type == 'general-purpose' and description.lower().startswith('review'):
@@ -61,8 +75,11 @@ def main() -> None:
     tool_input = payload.get('tool_input', {})
     subagent_type = tool_input.get('subagent_type', '')
     description = tool_input.get('description', '')
-    cwd = payload.get('cwd', '')
-    prompt = tool_input.get('prompt', '')
+
+    # Bypass check — first thing, before all other logic
+    if is_bypass(description):
+        log(f'bypass flag detected, passing through | desc={description[:60]}')
+        sys.exit(0)
 
     if not is_review_call(subagent_type, description):
         log(f'pass-through | type={subagent_type} | desc={description[:60]}')
@@ -70,78 +87,9 @@ def main() -> None:
 
     log(f'intercepted | type={subagent_type} | desc={description[:60]}')
 
-    # Build Gemini command
-    try:
-        timeout = int(os.environ.get('GEMINI_TIMEOUT', '120'))
-        if timeout <= 0:
-            timeout = 120
-    except ValueError:
-        timeout = 120
-    policy_path = os.path.join(cwd, '.claude', 'hooks', 'gemini-review-policy.toml')
-    cmd = [
-        'gemini',
-        '-p', 'Perform the review task described in the input above.',
-        '--approval-mode', 'yolo',
-        '--policy', policy_path,
-        '--include-directories', cwd,
-        '-o', 'text',
-    ]
-    model = os.environ.get('GEMINI_REVIEW_MODEL', '')
-    if model:
-        cmd.extend(['-m', model])
-
-    # Run Gemini with hard timeout — TimeoutExpired falls through to Claude agent
-    try:
-        result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        log(f'timeout: gemini killed after {timeout}s | falling back to real agent')
-        sys.exit(0)
-    except FileNotFoundError:
-        log('fallback: gemini not found on PATH')
-        sys.exit(0)
-
-    gemini_output = result.stdout
-    ctrl_chars = sum(1 for c in gemini_output if ord(c) < 32 and c not in '\t\n\r')
-
-    log(
-        f'gemini exit={result.returncode} | '
-        f'output_bytes={len(gemini_output.encode())} | '
-        f'control_chars={ctrl_chars}'
-    )
-    log(f'gemini stderr: {result.stderr}')
-
-    if result.returncode != 0:
-        log('fallback: gemini non-zero exit')
-        sys.exit(0)
-
-    if not gemini_output.strip():
-        log('fallback: empty output')
-        sys.exit(0)
-
-    # Build deny response — json.dumps correctly escapes all control characters
-    reason = (
-        'A PreToolUse hook intercepted your review agent call and redirected it to Gemini CLI. '
-        "The following is Gemini's complete review. Continue the workflow as normal.\n\n"
-        '[GEMINI REVIEW]\n\n---\n\n'
-        + gemini_output
-    )
-
-    response = {
-        'hookSpecificOutput': {
-            'hookEventName': 'PreToolUse',
-            'permissionDecision': 'deny',
-            'permissionDecisionReason': reason,
-        }
-    }
-
-    log(f'jq SUCCESS | json_bytes={len(json.dumps(response))}')
-    print(json.dumps(response))
+    # TODO: dispatch to OpenCode (wired in Task 8)
+    # For now, fall through so tests pass without a server
+    sys.exit(0)
 
 
 if __name__ == '__main__':

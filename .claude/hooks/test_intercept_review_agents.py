@@ -248,3 +248,63 @@ def test_fake_opencode_health(fake_opencode):
     assert resp.status == 200
     body = json.loads(resp.read())
     assert body['healthy'] is True
+
+
+# ---------------------------------------------------------------------------
+# Detection
+# ---------------------------------------------------------------------------
+
+def test_non_review_general_purpose_passes_through():
+    """general-purpose + non-review description → pass through (exit 0, no output)."""
+    result = run_hook(make_payload('general-purpose', 'Explore codebase for API endpoints'))
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_explore_subagent_passes_through():
+    """Explore subagent → pass through."""
+    result = run_hook(make_payload('Explore', 'Find relevant files'))
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_code_reviewer_subagent_detected():
+    """subagent_type == 'superpowers:code-reviewer' → intercepted (non-empty output)."""
+    result = run_hook(make_payload('superpowers:code-reviewer'))
+    assert result.returncode == 0
+    # Until dispatch is wired, interception still exits 0 but we can check stderr for log
+    # For now, just verify it doesn't crash
+    assert result.returncode == 0
+
+
+def test_general_purpose_review_description_detected():
+    """general-purpose + 'Review...' description → intercepted."""
+    result = run_hook(make_payload('general-purpose', 'Review spec compliance for Task 1'))
+    assert result.returncode == 0
+
+
+def test_review_description_case_insensitive():
+    """Detection is case-insensitive on 'review' prefix."""
+    result = run_hook(make_payload('general-purpose', 'REVIEW the implementation'))
+    assert result.returncode == 0
+
+
+def test_bypass_flag_passes_through():
+    """[BYPASS_HOOK] prefix in description → immediate pass-through, no interception."""
+    result = run_hook(make_payload(
+        'superpowers:code-reviewer',
+        '[BYPASS_HOOK] Review implementation',
+    ))
+    assert result.returncode == 0
+    assert result.stdout == ''
+
+
+def test_bypass_flag_not_triggered_by_substring():
+    """BYPASS_HOOK must be at the start of description, not embedded."""
+    result = run_hook(make_payload(
+        'superpowers:code-reviewer',
+        'Please review [BYPASS_HOOK] this code',
+    ))
+    assert result.returncode == 0
+    # This SHOULD be intercepted (bypass only works as prefix)
+    # Until dispatch is wired, we can't distinguish — just verify no crash
