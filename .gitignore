@@ -52,3 +52,6 @@ readwren-profiles/
 .claude/settings.local.json
 .claude-launcher-state.json
 .superpowers/
+
+# OpenCode async bridge handshake files
+.opencode/tasks/
