@@ -369,3 +369,24 @@ def test_append_progress_creates_and_appends(tmp_path):
     content = progress_file.read_text()
     assert 'token one' in content
     assert 'token two' in content
+
+
+# ---------------------------------------------------------------------------
+# Server health check
+# ---------------------------------------------------------------------------
+
+def test_health_check_success(fake_opencode):
+    """health_check returns True when server responds 200."""
+    server = fake_opencode(health_ok=True)
+    assert _hook.health_check(server.port) is True
+
+
+def test_health_check_server_down():
+    """health_check returns False when nothing is listening."""
+    assert _hook.health_check(19999) is False
+
+
+def test_health_check_server_error(fake_opencode):
+    """health_check returns False when server returns 503."""
+    server = fake_opencode(health_ok=False)
+    assert _hook.health_check(server.port) is False

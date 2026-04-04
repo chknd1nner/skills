@@ -109,6 +109,24 @@ def append_progress(cwd: str, task_id: str, line: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Server management
+# ---------------------------------------------------------------------------
+def health_check(port: int, password: str | None = None) -> bool:
+    """GET /global/health — True if server responds {"healthy": true}."""
+    try:
+        req = Request(f'http://127.0.0.1:{port}/global/health')
+        if password:
+            req.add_header('Authorization', f'Bearer {password}')
+        with urlopen(req, timeout=2) as resp:
+            if resp.status != 200:
+                return False
+            body = json.loads(resp.read())
+            return body.get('healthy') is True
+    except (URLError, OSError, json.JSONDecodeError):
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main() -> None:
