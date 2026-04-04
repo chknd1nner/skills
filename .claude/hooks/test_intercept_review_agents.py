@@ -507,3 +507,102 @@ def test_create_session_server_down():
     """create_session returns None when server is unreachable."""
     session_id = _hook.create_session(19999)
     assert session_id is None
+
+
+# ---------------------------------------------------------------------------
+# Main hook flow (end-to-end via subprocess)
+# ---------------------------------------------------------------------------
+
+def test_hook_dispatches_and_returns_deny(fake_opencode, tmp_path):
+    """Full interception: server healthy → dispatch → deny JSON with task info."""
+    server = fake_opencode(
+        session_id='sess-abc',
+        result_text='## Review\n\nLooks good.',
+    )
+    cwd = str(tmp_path / 'project')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer', cwd=cwd),
+        env={
+            'OPENCODE_PORT': str(server.port),
+            'OPENCODE_STARTUP_TIMEOUT': '2',
+            'OPENCODE_SKIP_POLLER': '1',  # don't spawn background process
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    hs = output['hookSpecificOutput']
+    assert hs['hookEventName'] == 'PreToolUse'
+    assert hs['permissionDecision'] == 'deny'
+    reason = hs['permissionDecisionReason']
+    assert '.opencode/tasks/' in reason
+    assert '.status' in reason
+    assert '.result.md' in reason
+    assert 'BYPASS_HOOK' in reason
+
+
+def test_hook_writes_pending_status(fake_opencode, tmp_path):
+    """After dispatch, PENDING status file exists in cwd."""
+    server = fake_opencode(session_id='sess-abc', prompt_accepted=True)
+    cwd = str(tmp_path / 'project')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer', cwd=cwd),
+        env={
+            'OPENCODE_PORT': str(server.port),
+            'OPENCODE_STARTUP_TIMEOUT': '2',
+            'OPENCODE_SKIP_POLLER': '1',  # don't spawn background poller
+        },
+    )
+    assert result.returncode == 0
+    # Extract task_id from deny reason
+    output = json.loads(result.stdout)
+    reason = output['hookSpecificOutput']['permissionDecisionReason']
+    # Parse task_id from ".opencode/tasks/{task_id}.status"
+    import re
+    match = re.search(r'\.opencode/tasks/([a-f0-9]+)\.status', reason)
+    assert match, f'Could not find task_id in reason: {reason}'
+    task_id = match.group(1)
+    status_file = tmp_path / 'project' / '.opencode' / 'tasks' / f'{task_id}.status'
+    assert status_file.exists()
+    assert status_file.read_text().strip() == 'PENDING'
+
+
+def test_hook_falls_through_when_server_unreachable(tmp_path):
+    """If no server is running, hook exits 0 with no stdout (Claude agent fallback)
+    but prints a warning to stderr and logs to file."""
+    cwd = str(tmp_path / 'project')
+    log_file = str(tmp_path / 'fallback-test.log')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer', cwd=cwd),
+        env={
+            'OPENCODE_PORT': '19999',
+            'OPENCODE_STARTUP_TIMEOUT': '1',
+            'OPENCODE_LOG_FILE': log_file,
+            'PATH': '/nonexistent',
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''
+    # Verify stderr warning is always printed (regardless of debug mode)
+    assert 'server startup failed' in result.stderr.lower()
+    assert 'Falling back to Claude agent' in result.stderr
+    # Verify log file was written (always, not just in debug mode)
+    import pathlib
+    assert pathlib.Path(log_file).exists()
+    log_content = pathlib.Path(log_file).read_text()
+    assert 'STARTUP FAILURE' in log_content
+
+
+def test_hook_bypass_still_works_with_server_running(fake_opencode, tmp_path):
+    """[BYPASS_HOOK] passes through even when server is healthy."""
+    server = fake_opencode()
+    cwd = str(tmp_path / 'project')
+    result = run_hook(
+        make_payload(
+            'superpowers:code-reviewer',
+            '[BYPASS_HOOK] Review implementation',
+            cwd=cwd,
+        ),
+        env={'OPENCODE_PORT': str(server.port)},
+    )
+    assert result.returncode == 0
+    assert result.stdout == ''

@@ -50,6 +50,37 @@ else:
 log = logging.debug
 
 
+def _int_env(name: str, default: int) -> int:
+    """Read an env var as int, fall back to default on missing/invalid."""
+    try:
+        val = int(os.environ.get(name, str(default)))
+        return val if val > 0 else default
+    except ValueError:
+        return default
+
+
+def _always_log_failure(err: str) -> None:
+    """Log startup failure to file AND stderr, regardless of debug mode.
+    Debug mode controls verbose per-request logging; startup failures
+    are exceptional events that are always recorded."""
+    log_file = os.environ.get('OPENCODE_LOG_FILE', '/tmp/opencode-hook-debug.log')
+    # Always append to log file
+    try:
+        with open(log_file, 'a') as f:
+            from datetime import datetime, timezone
+            ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
+            f.write(f'[{ts}] STARTUP FAILURE: {err}\n')
+    except OSError:
+        pass
+    # Always print to stderr (visible in terminal, not captured by Claude)
+    summary = err.split('\n')[0][:200] if err else 'unknown error'
+    print(
+        f'OpenCode hook: server startup failed — {summary}. '
+        f'Falling back to Claude agent. Details: {log_file}',
+        file=sys.stderr,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Detection
 # ---------------------------------------------------------------------------
@@ -211,6 +242,8 @@ def main() -> None:
     tool_input = payload.get('tool_input', {})
     subagent_type = tool_input.get('subagent_type', '')
     description = tool_input.get('description', '')
+    cwd = payload.get('cwd', '')
+    prompt = tool_input.get('prompt', '')
 
     # Bypass check — first thing, before all other logic
     if is_bypass(description):
@@ -223,9 +256,65 @@ def main() -> None:
 
     log(f'intercepted | type={subagent_type} | desc={description[:60]}')
 
-    # TODO: dispatch to OpenCode (wired in Task 8)
-    # For now, fall through so tests pass without a server
-    sys.exit(0)
+    # Read config
+    port = _int_env('OPENCODE_PORT', 4096)
+    startup_timeout = _int_env('OPENCODE_STARTUP_TIMEOUT', 10)
+    model = os.environ.get('OPENCODE_MODEL', '') or None
+    password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
+
+    # Ensure server is running
+    ok, err = ensure_server(port, startup_timeout, password)
+    if not ok:
+        # Always log startup failures regardless of debug mode
+        _always_log_failure(err)
+        sys.exit(0)
+
+    # Generate task ID and create session
+    task_id = uuid.uuid4().hex[:12]
+
+    session_id = create_session(port, password)
+    if not session_id:
+        log('failed to create session | falling back to Claude agent')
+        sys.exit(0)
+
+    # Write prompt to file (background process reads it)
+    write_status(cwd, task_id, 'PENDING')  # also creates tasks dir
+    prompt_file = os.path.join(tasks_dir(cwd), f'{task_id}.prompt')
+    with open(prompt_file, 'w') as f:
+        f.write(prompt)
+
+    # Spawn background process (skip in tests via OPENCODE_SKIP_POLLER=1)
+    if os.environ.get('OPENCODE_SKIP_POLLER', '0') != '1':
+        subprocess.Popen(
+            [sys.executable, __file__, '--poll', session_id, task_id, str(port), cwd],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Build and return deny response
+    reason = (
+        'A PreToolUse hook dispatched this review to OpenCode Server (async). '
+        'The review is running in the background. When you\'re ready for the result, read '
+        f'`.opencode/tasks/{task_id}.status`. When it says COMPLETE, read '
+        f'`.opencode/tasks/{task_id}.result.md` and continue the workflow as normal. '
+        'If it says FAILED, re-invoke the original agent call with [BYPASS_HOOK] '
+        'prepended to the description field \u2014 the hook will let it through to the '
+        'Claude agent this time.\n\n'
+        'The review typically takes 30\u201360 seconds. Continue with your current work '
+        'and check back after completing your next task.'
+    )
+
+    response = {
+        'hookSpecificOutput': {
+            'hookEventName': 'PreToolUse',
+            'permissionDecision': 'deny',
+            'permissionDecisionReason': reason,
+        }
+    }
+
+    log(f'dispatched | task={task_id} | session={session_id}')
+    print(json.dumps(response))
 
 
 if __name__ == '__main__':
