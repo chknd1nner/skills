@@ -21,9 +21,11 @@ Environment variables:
   OPENCODE_LOG_FILE          Log file path (default: /tmp/opencode-hook-debug.log)
   OPENCODE_SKIP_POLLER=1     Test-only: suppress background process spawning
 """
+import hashlib
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -224,6 +226,79 @@ def ensure_server(port: int, startup_timeout: int, password: str | None = None, 
     if health_check(port, password):
         return True, ''
     return start_server(port, startup_timeout, password, path_override, cwd=cwd)
+
+
+# ---------------------------------------------------------------------------
+# Port resolution
+# ---------------------------------------------------------------------------
+def is_port_free(port: int) -> bool:
+    """Check if a port is free by attempting a TCP connect."""
+    try:
+        with socket.create_connection(('127.0.0.1', port), timeout=0.5):
+            return False  # something is listening
+    except (ConnectionRefusedError, OSError):
+        return True  # nothing listening — port is free
+
+
+def _hash_port(cwd: str) -> int:
+    """Deterministic starting port in ephemeral range based on cwd hash."""
+    h = int(hashlib.md5(cwd.encode()).hexdigest(), 16)
+    return (h % 16384) + 49152
+
+
+def read_port_file(cwd: str) -> int | None:
+    """Read .opencode/server.port, return port int or None if missing/invalid."""
+    try:
+        path = os.path.join(cwd, '.opencode', 'server.port')
+        with open(path) as f:
+            return int(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def write_port_file(cwd: str, port: int) -> None:
+    """Write port to .opencode/server.port (atomic via rename)."""
+    d = os.path.join(cwd, '.opencode')
+    os.makedirs(d, exist_ok=True)
+    final = os.path.join(d, 'server.port')
+    tmp = final + '.tmp'
+    with open(tmp, 'w') as f:
+        f.write(f'{port}\n')
+    os.replace(tmp, final)
+
+
+def resolve_port(cwd: str) -> tuple[int, str]:
+    """
+    Resolve which port to use for this project's OpenCode server.
+    Returns (port, source) where source is 'env', 'file', or 'auto'.
+    """
+    # 1. Force override from env
+    env_port = os.environ.get('OPENCODE_PORT', '')
+    if env_port:
+        try:
+            p = int(env_port)
+            if p > 0:
+                return p, 'env'
+        except ValueError:
+            pass
+
+    # 2. Port file fast path
+    password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
+    file_port = read_port_file(cwd)
+    if file_port and health_check(file_port, password):
+        return file_port, 'file'
+
+    # 3. Auto-select: hash-seeded scan for free port
+    start = _hash_port(cwd)
+    for i in range(50):
+        candidate = start + i
+        if candidate > 65535:
+            candidate = 49152 + (candidate - 65535 - 1)
+        if is_port_free(candidate):
+            return candidate, 'auto'
+
+    # Fallback — shouldn't happen in practice
+    return _hash_port(cwd), 'auto'
 
 
 # ---------------------------------------------------------------------------

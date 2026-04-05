@@ -665,6 +665,94 @@ def test_hook_bypass_still_works_with_server_running(fake_opencode, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Port resolution
+# ---------------------------------------------------------------------------
+
+def test_is_port_free_unused_port():
+    """A port with nothing listening is free."""
+    assert _hook.is_port_free(59999) is True
+
+
+def test_is_port_free_used_port(fake_opencode):
+    """A port with a server listening is not free."""
+    server = fake_opencode()
+    assert _hook.is_port_free(server.port) is False
+
+
+def test_resolve_port_env_override():
+    """OPENCODE_PORT set → return that port, skip auto-selection."""
+    import os
+    old = os.environ.get('OPENCODE_PORT')
+    try:
+        os.environ['OPENCODE_PORT'] = '12345'
+        port, source = _hook.resolve_port('/tmp/test-project')
+        assert port == 12345
+        assert source == 'env'
+    finally:
+        if old is None:
+            os.environ.pop('OPENCODE_PORT', None)
+        else:
+            os.environ['OPENCODE_PORT'] = old
+
+
+def test_resolve_port_from_file(fake_opencode, tmp_path):
+    """Port file exists and server is healthy → return port from file."""
+    server = fake_opencode()
+    cwd = str(tmp_path / 'project')
+    port_dir = tmp_path / 'project' / '.opencode'
+    port_dir.mkdir(parents=True)
+    (port_dir / 'server.port').write_text(str(server.port))
+
+    import os
+    old = os.environ.pop('OPENCODE_PORT', None)
+    try:
+        port, source = _hook.resolve_port(cwd)
+        assert port == server.port
+        assert source == 'file'
+    finally:
+        if old is not None:
+            os.environ['OPENCODE_PORT'] = old
+
+
+def test_resolve_port_stale_file(tmp_path):
+    """Port file exists but server is not healthy → auto-select new port."""
+    cwd = str(tmp_path / 'project')
+    port_dir = tmp_path / 'project' / '.opencode'
+    port_dir.mkdir(parents=True)
+    (port_dir / 'server.port').write_text('19999')  # nothing listening here
+
+    import os
+    old = os.environ.pop('OPENCODE_PORT', None)
+    try:
+        port, source = _hook.resolve_port(cwd)
+        assert port != 19999
+        assert source == 'auto'
+        assert 49152 <= port <= 65535
+    finally:
+        if old is not None:
+            os.environ['OPENCODE_PORT'] = old
+
+
+def test_resolve_port_skips_used_ports(fake_opencode, tmp_path, monkeypatch):
+    """If the hash-derived port is in use, increment to find a free one."""
+    server = fake_opencode()
+    cwd = str(tmp_path / 'project')
+
+    # Force the hash to land on the fake server's port
+    monkeypatch.setattr(_hook, '_hash_port', lambda _cwd: server.port)
+
+    import os
+    old = os.environ.pop('OPENCODE_PORT', None)
+    try:
+        port, source = _hook.resolve_port(cwd)
+        assert port != server.port  # should have skipped the used port
+        assert source == 'auto'
+    finally:
+        if old is not None:
+            os.environ['OPENCODE_PORT'] = old
+
+
+# ---------------------------------------------------------------------------
 # Background process
 # ---------------------------------------------------------------------------
 
