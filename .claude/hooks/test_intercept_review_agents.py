@@ -814,7 +814,7 @@ def test_background_writes_complete_on_success(fake_opencode, tmp_path):
         task_id='bg-test-1',
         port=server.port,
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '10'},
+        env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': ''},
     )
     assert result.returncode == 0
 
@@ -839,7 +839,7 @@ def test_background_timeout_writes_failed(fake_opencode, tmp_path):
         task_id='bg-test-2',
         port=server.port,
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '2'},
+        env={'OPENCODE_TIMEOUT': '2', 'OPENCODE_MODEL': ''},
         timeout=15,
     )
     assert result.returncode == 0
@@ -860,7 +860,7 @@ def test_background_server_crash_writes_failed(tmp_path):
         task_id='bg-test-3',
         port=19999,  # nothing listening
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '3'},
+        env={'OPENCODE_TIMEOUT': '3', 'OPENCODE_MODEL': ''},
         timeout=10,
     )
     assert result.returncode == 0
@@ -878,7 +878,7 @@ def test_background_extracts_multiple_text_parts(fake_opencode, tmp_path):
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-4.prompt').write_text('Review this.')
 
     run_poller(session_id='sess-abc', task_id='bg-test-4', port=server.port,
-               cwd=cwd, env={'OPENCODE_TIMEOUT': '10'})
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': ''})
 
     result_content = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-4.result.md').read_text()
     assert 'Clean.' in result_content
@@ -906,7 +906,7 @@ def test_background_sse_events_written_to_progress(fake_opencode, tmp_path):
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-5.prompt').write_text('Review this.')
 
     run_poller(session_id='sess-abc', task_id='bg-test-5', port=server.port,
-               cwd=cwd, env={'OPENCODE_TIMEOUT': '10'})
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': ''})
 
     progress_file = tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-5.progress.md'
     assert progress_file.exists()
@@ -926,7 +926,7 @@ def test_background_prompt_not_accepted(fake_opencode, tmp_path):
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-6.prompt').write_text('Review this.')
 
     run_poller(session_id='sess-abc', task_id='bg-test-6', port=server.port,
-               cwd=cwd, env={'OPENCODE_TIMEOUT': '5'})
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '5', 'OPENCODE_MODEL': ''})
 
     status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-6.status').read_text()
     assert status.strip() == 'FAILED'
@@ -1014,3 +1014,49 @@ def test_prompt_without_model_override(fake_opencode, tmp_path):
     msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
     assert len(msg_reqs) == 1
     assert 'modelID' not in msg_reqs[0]['body']
+
+
+def test_auth_header_forwarded_to_message(fake_opencode, tmp_path):
+    """OPENCODE_SERVER_PASSWORD is sent as Bearer token on /message POST."""
+    server = fake_opencode(session_id='sess-auth', result_text='## Review\n\nOk.')
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'auth-test', 'PENDING')
+    import pathlib
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'auth-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-auth',
+        task_id='auth-test',
+        port=server.port,
+        cwd=cwd,
+        env={
+            'OPENCODE_TIMEOUT': '10',
+            'OPENCODE_MODEL': '',
+            'OPENCODE_SERVER_PASSWORD': 'test-secret-123',
+        },
+    )
+
+    # Check /message POST has auth header
+    msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
+    assert len(msg_reqs) == 1
+    assert msg_reqs[0]['headers'].get('Authorization') == 'Bearer test-secret-123'
+
+
+def test_auth_header_forwarded_to_session_creation(fake_opencode, tmp_path):
+    """OPENCODE_SERVER_PASSWORD is sent as Bearer token on /session POST (main hook path)."""
+    server = fake_opencode(session_id='sess-auth-hook')
+    cwd = str(tmp_path / 'project')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer', cwd=cwd),
+        env={
+            'OPENCODE_PORT': str(server.port),
+            'OPENCODE_STARTUP_TIMEOUT': '2',
+            'OPENCODE_SKIP_POLLER': '1',
+            'OPENCODE_SERVER_PASSWORD': 'test-secret-456',
+        },
+    )
+    assert result.returncode == 0
+
+    session_reqs = [r for r in server.requests if r['path'] == '/session' and r['method'] == 'POST']
+    assert len(session_reqs) >= 1
+    assert session_reqs[0]['headers'].get('Authorization') == 'Bearer test-secret-456'
