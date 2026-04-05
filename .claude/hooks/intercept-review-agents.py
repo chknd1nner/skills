@@ -288,8 +288,6 @@ def _sse_thread(port: int, session_id: str, task_id: str, cwd: str,
                                 append_progress(cwd, task_id, f'\n[TOOL: {tool}] {detail}\n')
                 except (json.JSONDecodeError, KeyError):
                     pass
-                if stop_event.is_set():
-                    break
     except (URLError, OSError):
         pass  # server gone or stop requested
 
@@ -347,9 +345,9 @@ def run_background_process(
         write_status(cwd, task_id, 'FAILED')
         return
 
-    # Wait for SSE thread to drain naturally (server closes stream); then signal stop
-    sse.join(timeout=5)
+    # Signal SSE thread to exit, then wait for it to drain buffered events
     stop_event.set()
+    sse.join(timeout=5)
 
     # Verify terminal state
     finish = response.get('info', {}).get('finish', '')
