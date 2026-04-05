@@ -268,25 +268,55 @@ def test_explore_subagent_passes_through():
     assert result.stdout == ''
 
 
-def test_code_reviewer_subagent_detected():
-    """subagent_type == 'superpowers:code-reviewer' → intercepted (non-empty output)."""
-    result = run_hook(make_payload('superpowers:code-reviewer'))
+def test_code_reviewer_subagent_detected(fake_opencode, tmp_path):
+    """subagent_type == 'superpowers:code-reviewer' → intercepted with deny JSON."""
+    server = fake_opencode(session_id='sess-detect')
+    cwd = str(tmp_path / 'project')
+    result = run_hook(
+        make_payload('superpowers:code-reviewer', cwd=cwd),
+        env={
+            'OPENCODE_PORT': str(server.port),
+            'OPENCODE_STARTUP_TIMEOUT': '2',
+            'OPENCODE_SKIP_POLLER': '1',
+        },
+    )
     assert result.returncode == 0
-    # Until dispatch is wired, interception still exits 0 but we can check stderr for log
-    # For now, just verify it doesn't crash
+    deny = json.loads(result.stdout)
+    assert deny['hookSpecificOutput']['permissionDecision'] == 'deny'
+
+
+def test_general_purpose_review_description_detected(fake_opencode, tmp_path):
+    """general-purpose + 'Review...' description → intercepted with deny JSON."""
+    server = fake_opencode(session_id='sess-detect-gp')
+    cwd = str(tmp_path / 'project')
+    result = run_hook(
+        make_payload('general-purpose', 'Review spec compliance for Task 1', cwd=cwd),
+        env={
+            'OPENCODE_PORT': str(server.port),
+            'OPENCODE_STARTUP_TIMEOUT': '2',
+            'OPENCODE_SKIP_POLLER': '1',
+        },
+    )
     assert result.returncode == 0
+    deny = json.loads(result.stdout)
+    assert deny['hookSpecificOutput']['permissionDecision'] == 'deny'
 
 
-def test_general_purpose_review_description_detected():
-    """general-purpose + 'Review...' description → intercepted."""
-    result = run_hook(make_payload('general-purpose', 'Review spec compliance for Task 1'))
-    assert result.returncode == 0
-
-
-def test_review_description_case_insensitive():
+def test_review_description_case_insensitive(fake_opencode, tmp_path):
     """Detection is case-insensitive on 'review' prefix."""
-    result = run_hook(make_payload('general-purpose', 'REVIEW the implementation'))
+    server = fake_opencode(session_id='sess-detect-case')
+    cwd = str(tmp_path / 'project')
+    result = run_hook(
+        make_payload('general-purpose', 'REVIEW the implementation', cwd=cwd),
+        env={
+            'OPENCODE_PORT': str(server.port),
+            'OPENCODE_STARTUP_TIMEOUT': '2',
+            'OPENCODE_SKIP_POLLER': '1',
+        },
+    )
     assert result.returncode == 0
+    deny = json.loads(result.stdout)
+    assert deny['hookSpecificOutput']['permissionDecision'] == 'deny'
 
 
 def test_bypass_flag_passes_through():
@@ -299,15 +329,25 @@ def test_bypass_flag_passes_through():
     assert result.stdout == ''
 
 
-def test_bypass_flag_not_triggered_by_substring():
+def test_bypass_flag_not_triggered_by_substring(fake_opencode, tmp_path):
     """BYPASS_HOOK must be at the start of description, not embedded."""
-    result = run_hook(make_payload(
-        'superpowers:code-reviewer',
-        'Please review [BYPASS_HOOK] this code',
-    ))
+    server = fake_opencode(session_id='sess-detect-bypass')
+    cwd = str(tmp_path / 'project')
+    result = run_hook(
+        make_payload(
+            'superpowers:code-reviewer',
+            'Please review [BYPASS_HOOK] this code',
+            cwd=cwd,
+        ),
+        env={
+            'OPENCODE_PORT': str(server.port),
+            'OPENCODE_STARTUP_TIMEOUT': '2',
+            'OPENCODE_SKIP_POLLER': '1',
+        },
+    )
     assert result.returncode == 0
-    # This SHOULD be intercepted (bypass only works as prefix)
-    # Until dispatch is wired, we can't distinguish — just verify no crash
+    deny = json.loads(result.stdout)
+    assert deny['hookSpecificOutput']['permissionDecision'] == 'deny'
 
 
 # ---------------------------------------------------------------------------
