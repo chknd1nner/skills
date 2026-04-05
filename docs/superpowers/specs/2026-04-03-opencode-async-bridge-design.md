@@ -1,6 +1,6 @@
 # OpenCode Async Bridge — Design Spec
 
-> **Last updated:** 2026-04-04
+> **Last updated:** 2026-04-05
 > This is a living document. If source code were lost, this spec should be sufficient to recreate it.
 
 ## Overview
@@ -57,6 +57,8 @@ File-based handshake mechanism under `.opencode/tasks/` in the project root:
 - `{task_id}.result.md` — the review content (written when POST returns)
 - `{task_id}.progress.md` — real-time transcript of agent work: token stream and tool calls (written continuously by SSE thread)
 
+Status and result files are written atomically via temp file + `os.replace()`. Readers polling these files are guaranteed to see either the previous state or the new state, never partial content.
+
 ---
 
 ## Detection
@@ -78,7 +80,7 @@ The bypass check is the very first thing in the hook, before detection or server
 
 ### Discovery
 
-On each invocation, the hook tries `GET http://127.0.0.1:{port}/global/health` as a health check. Returns `{"healthy": true, "version": "..."}` when ready. Port is configurable via `OPENCODE_PORT` (default `4096`).
+On each invocation, the hook resolves the port via `resolve_port(cwd)`: first checks `OPENCODE_PORT` env var (force override), then reads `.opencode/server.port` and health-checks that port, then auto-selects a free port by hashing the cwd into the ephemeral range (49152–65535). Health check is `GET http://127.0.0.1:{port}/global/health`, expecting `{"healthy": true}`.
 
 ### On-Demand Startup
 
@@ -217,10 +219,11 @@ The SSE thread writes to the progress file append-only as events arrive — if t
 
 When the blocking POST returns with `finish == "stop"`:
 
-1. Extract all `parts` where `type == "text"` and join them.
-2. Write to `.opencode/tasks/{task_id}.result.md`.
-3. Write `COMPLETE` to `.opencode/tasks/{task_id}.status`.
-4. Exit (SSE thread terminates as the process exits).
+1. Signal the SSE thread to stop (`stop_event.set()`), then wait for it to drain (`sse.join(timeout=5)`).
+2. Extract all `parts` where `type == "text"` and join them.
+3. Write to `.opencode/tasks/{task_id}.result.md` (atomic via temp file + `os.replace()`).
+4. Write `COMPLETE` to `.opencode/tasks/{task_id}.status` (atomic via temp file + `os.replace()`).
+5. Exit.
 
 ### Error Handling
 
@@ -268,8 +271,8 @@ Environment variables, settable in `settings.local.json` under `"env"`:
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENCODE_PORT` | `4096` | Port for OpenCode Server |
-| `OPENCODE_TIMEOUT` | `300` | Seconds before background process write FAILED (HTTP request timeout) |
+| `OPENCODE_PORT` | *(auto)* | Force-override port (skips per-project auto-selection) |
+| `OPENCODE_TIMEOUT` | `1800` | Seconds before background process write FAILED (HTTP request timeout) |
 | `OPENCODE_STARTUP_TIMEOUT` | `10` | Seconds to wait for server health on startup |
 | `OPENCODE_DEBUG` | `0` | Enable debug logging |
 | `OPENCODE_LOG_FILE` | `/tmp/opencode-hook-debug.log` | Log file path |
@@ -295,11 +298,13 @@ The detection logic is hardcoded for reviews only in v2. The dispatch function i
     intercept-review-agents.sh     # v1 bash (already archived)
     intercept-review-agents-v1.py  # v1 python, archived when v2 ships
 
-.opencode/tasks/                   # gitignored, created on first dispatch
-  {task_id}.status                 # PENDING | COMPLETE | FAILED
-  {task_id}.prompt                 # review prompt text (hook → poller IPC)
-  {task_id}.result.md              # review content (written on POST completion)
-  {task_id}.progress.md            # real-time transcript: token stream + tool calls
+.opencode/                           # gitignored
+  server.port                      # auto-selected port (plain text, atomic write)
+  tasks/                           # created on first dispatch
+    {task_id}.status               # PENDING | COMPLETE | FAILED
+    {task_id}.prompt               # review prompt text (hook → poller IPC)
+    {task_id}.result.md            # review content (written on POST completion)
+    {task_id}.progress.md          # real-time transcript: token stream + tool calls
 ```
 
 ---
@@ -396,4 +401,4 @@ All of the following were confirmed against OpenCode v1.3.13 via live probing.
 - **Part types observed:** `step-start`, `step-finish`, `text`, `tool`. `step-finish` carries a `reason` field: `"stop"` (normal completion) or `"tool-calls"` (intermediate step, not returned by the POST).
 - **SSE stream:** `GET /global/event` — Server-Sent Events, no auth required on an unsecured server. Each event is `data: {JSON}\n\n`. The JSON has a `payload` object with `type` and `properties` fields. Relevant event types: `message.part.delta` (token chunk in `properties.delta`, a raw string), `message.part.updated` (full part state including tool call input/output), `session.status` (`busy`/`idle`), `session.idle` (fires after POST completes). All events include a `sessionID` in `properties` — filter on this to isolate the active session.
 - **No OpenAI-compatible endpoint:** `/v1/chat/completions`, `/v1/models`, and similar paths do not exist.
-- **Auth header format:** Not yet tested with `OPENCODE_SERVER_PASSWORD`. Assumed to be a standard header — verify during build.
+- **Auth header format:** `Authorization: Bearer {OPENCODE_SERVER_PASSWORD}`. Sent on health check, session creation, message POST, and SSE subscription. Verified in test suite.

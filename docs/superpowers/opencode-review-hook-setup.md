@@ -13,7 +13,7 @@ The OpenCode review hook (`intercept-review-agents.py`) intercepts review-type A
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `OPENCODE_PORT` | No | `4096` | Port for OpenCode Server |
+| `OPENCODE_PORT` | No | (auto-selected) | Force-override port (skips auto-selection) |
 | `OPENCODE_MODEL` | No | (server default) | Model ID for reviews, e.g. `gemini-2.5-pro` |
 | `OPENCODE_TIMEOUT` | No | `1800` | Timeout in seconds for the background POST |
 | `OPENCODE_STARTUP_TIMEOUT` | No | `10` | Seconds to wait for server to become healthy |
@@ -22,7 +22,9 @@ The OpenCode review hook (`intercept-review-agents.py`) intercepts review-type A
 | `OPENCODE_LOG_FILE` | No | `/tmp/opencode-hook-debug.log` | Where debug and error logs are written |
 | `OPENCODE_SKIP_POLLER` | No | `0` | Test-only: suppresses background process |
 
-For most setups, you only need `OPENCODE_PORT` (if not using the default 4096) and optionally `OPENCODE_MODEL` to target a specific model from the GHCP catalog.
+For most setups, you only need `OPENCODE_MODEL` to target a specific model from the GHCP catalog. Port selection is automatic.
+
+**Port auto-selection:** When `OPENCODE_PORT` is not set, the hook automatically selects a free port for each project and writes it to `.opencode/server.port`. The server persists across sessions — subsequent invocations reuse the same port via the file. Set `OPENCODE_PORT` explicitly if you prefer to manage the server yourself.
 
 ## Configuration Methods
 
