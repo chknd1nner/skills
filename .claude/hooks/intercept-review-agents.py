@@ -466,10 +466,13 @@ def main() -> None:
     log(f'intercepted | type={subagent_type} | desc={description[:60]}')
 
     # Read config
-    port = _int_env('OPENCODE_PORT', 4096)
     startup_timeout = _int_env('OPENCODE_STARTUP_TIMEOUT', 10)
     model = os.environ.get('OPENCODE_MODEL', '') or None
     password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
+
+    # Resolve port (env override → port file → auto-select)
+    port, port_source = resolve_port(cwd)
+    log(f'port resolved | port={port} | source={port_source}')
 
     # Ensure server is running (cwd sets working directory for on-demand starts)
     ok, err = ensure_server(port, startup_timeout, password, cwd=cwd)
@@ -477,6 +480,10 @@ def main() -> None:
         # Always log startup failures regardless of debug mode
         _always_log_failure(err)
         sys.exit(0)
+
+    # Write port file on successful startup (only for auto-selected ports)
+    if port_source == 'auto':
+        write_port_file(cwd, port)
 
     # Generate task ID and create session
     task_id = uuid.uuid4().hex[:12]
