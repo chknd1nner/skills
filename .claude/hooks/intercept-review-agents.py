@@ -108,11 +108,14 @@ def tasks_dir(cwd: str) -> str:
 
 
 def write_status(cwd: str, task_id: str, status: str) -> None:
-    """Write status string to {task_id}.status file."""
+    """Write status string to {task_id}.status file (atomic via rename)."""
     d = tasks_dir(cwd)
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, f'{task_id}.status'), 'w') as f:
+    final = os.path.join(d, f'{task_id}.status')
+    tmp = final + '.tmp'
+    with open(tmp, 'w') as f:
         f.write(status)
+    os.replace(tmp, final)
 
 
 def read_status(cwd: str, task_id: str) -> str:
@@ -125,11 +128,14 @@ def read_status(cwd: str, task_id: str) -> str:
 
 
 def write_result(cwd: str, task_id: str, content: str) -> None:
-    """Write review content to {task_id}.result.md file."""
+    """Write review content to {task_id}.result.md file (atomic via rename)."""
     d = tasks_dir(cwd)
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, f'{task_id}.result.md'), 'w') as f:
+    final = os.path.join(d, f'{task_id}.result.md')
+    tmp = final + '.tmp'
+    with open(tmp, 'w') as f:
         f.write(content)
+    os.replace(tmp, final)
 
 
 def append_progress(cwd: str, task_id: str, line: str) -> None:
@@ -158,7 +164,7 @@ def health_check(port: int, password: str | None = None) -> bool:
         return False
 
 
-def start_server(port: int, startup_timeout: int, password: str | None = None, path_override: str | None = None) -> tuple[bool, str]:
+def start_server(port: int, startup_timeout: int, password: str | None = None, path_override: str | None = None, cwd: str | None = None) -> tuple[bool, str]:
     """
     Start opencode serve and wait until healthy or failure.
     Returns (success, error_message).
@@ -166,6 +172,8 @@ def start_server(port: int, startup_timeout: int, password: str | None = None, p
     Server stderr is redirected to OPENCODE_LOG_FILE (not PIPE) to prevent
     deadlock — the server is long-lived and PIPE buffers would fill and block it.
     On early exit, the tail of the log file is read for the error message.
+
+    cwd: working directory for the server process — sessions inherit this.
     """
     log_file = os.environ.get('OPENCODE_LOG_FILE', '/tmp/opencode-hook-debug.log')
     env = None
@@ -182,6 +190,7 @@ def start_server(port: int, startup_timeout: int, password: str | None = None, p
             stderr=log_fh,
             start_new_session=True,
             env=env,
+            cwd=cwd or None,
         )
     except FileNotFoundError:
         return False, 'opencode not found on PATH'
@@ -210,11 +219,11 @@ def start_server(port: int, startup_timeout: int, password: str | None = None, p
     return False, f'opencode did not become healthy within {startup_timeout}s'
 
 
-def ensure_server(port: int, startup_timeout: int, password: str | None = None, path_override: str | None = None) -> tuple[bool, str]:
+def ensure_server(port: int, startup_timeout: int, password: str | None = None, path_override: str | None = None, cwd: str | None = None) -> tuple[bool, str]:
     """Health check first, start if needed."""
     if health_check(port, password):
         return True, ''
-    return start_server(port, startup_timeout, password, path_override)
+    return start_server(port, startup_timeout, password, path_override, cwd=cwd)
 
 
 # ---------------------------------------------------------------------------
@@ -389,8 +398,8 @@ def main() -> None:
     model = os.environ.get('OPENCODE_MODEL', '') or None
     password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
 
-    # Ensure server is running
-    ok, err = ensure_server(port, startup_timeout, password)
+    # Ensure server is running (cwd sets working directory for on-demand starts)
+    ok, err = ensure_server(port, startup_timeout, password, cwd=cwd)
     if not ok:
         # Always log startup failures regardless of debug mode
         _always_log_failure(err)
@@ -403,6 +412,11 @@ def main() -> None:
     if not session_id:
         log('failed to create session | falling back to Claude agent')
         sys.exit(0)
+
+    # Prepend working directory context so the model knows where the repo is,
+    # even if the server was started from a different directory.
+    if cwd:
+        prompt = f'**Working directory:** `{cwd}`\n\n' + prompt
 
     # Write prompt to file (background process reads it)
     write_status(cwd, task_id, 'PENDING')  # also creates tasks dir

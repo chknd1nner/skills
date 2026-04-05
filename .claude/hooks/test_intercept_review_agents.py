@@ -341,6 +341,62 @@ def test_write_status_overwrites(tmp_path):
     assert status_file.read_text() == 'COMPLETE'
 
 
+def test_write_status_atomic_replace(tmp_path, monkeypatch):
+    """write_status writes to a temp file, then atomically replaces the final file."""
+    import os
+
+    cwd = str(tmp_path / 'project')
+    _hook.write_status(cwd, 'atomic-test', 'PENDING')
+    tasks = tmp_path / 'project' / '.opencode' / 'tasks'
+    final = tasks / 'atomic-test.status'
+    replace_calls = []
+    real_replace = os.replace
+
+    def fake_replace(src, dst):
+        replace_calls.append((src, dst))
+        assert src == str(final) + '.tmp'
+        assert dst == str(final)
+        assert final.read_text() == 'PENDING'
+        assert (tasks / 'atomic-test.status.tmp').read_text() == 'COMPLETE'
+        real_replace(src, dst)
+
+    monkeypatch.setattr(_hook.os, 'replace', fake_replace)
+
+    _hook.write_status(cwd, 'atomic-test', 'COMPLETE')
+
+    assert replace_calls == [(str(final) + '.tmp', str(final))]
+    assert final.read_text() == 'COMPLETE'
+    assert not (tasks / 'atomic-test.status.tmp').exists()
+
+
+def test_write_result_atomic_replace(tmp_path, monkeypatch):
+    """write_result writes to a temp file, then atomically replaces the final file."""
+    import os
+
+    cwd = str(tmp_path / 'project')
+    _hook.write_result(cwd, 'atomic-test', 'Old content')
+    tasks = tmp_path / 'project' / '.opencode' / 'tasks'
+    final = tasks / 'atomic-test.result.md'
+    replace_calls = []
+    real_replace = os.replace
+
+    def fake_replace(src, dst):
+        replace_calls.append((src, dst))
+        assert src == str(final) + '.tmp'
+        assert dst == str(final)
+        assert final.read_text() == 'Old content'
+        assert (tasks / 'atomic-test.result.md.tmp').read_text() == '## Review\n\nLooks good.'
+        real_replace(src, dst)
+
+    monkeypatch.setattr(_hook.os, 'replace', fake_replace)
+
+    _hook.write_result(cwd, 'atomic-test', '## Review\n\nLooks good.')
+
+    assert replace_calls == [(str(final) + '.tmp', str(final))]
+    assert final.read_text() == '## Review\n\nLooks good.'
+    assert not (tasks / 'atomic-test.result.md.tmp').exists()
+
+
 def test_write_result_creates_file(tmp_path):
     cwd = str(tmp_path / 'project')
     _hook.write_result(cwd, 'abc123', '## Review\n\nLooks good.')
@@ -825,7 +881,7 @@ def test_prompt_without_model_override(fake_opencode, tmp_path):
         task_id='nomodel-test',
         port=server.port,
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '10'},
+        env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': ''},
     )
     msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
     assert len(msg_reqs) == 1
