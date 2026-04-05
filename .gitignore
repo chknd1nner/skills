@@ -54,4 +54,4 @@ readwren-profiles/
 .superpowers/
 
 # OpenCode async bridge handshake files
-.opencode/tasks/
+.opencode/
