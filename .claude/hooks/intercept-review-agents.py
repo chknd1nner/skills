@@ -13,7 +13,7 @@ Detection patterns:
 
 Environment variables:
   OPENCODE_PORT              OpenCode Server port (default: 4096)
-  OPENCODE_TIMEOUT           Background process HTTP timeout in seconds (default: 300)
+  OPENCODE_TIMEOUT           Background process HTTP timeout in seconds (default: 1800)
   OPENCODE_STARTUP_TIMEOUT   Server startup timeout in seconds (default: 10)
   OPENCODE_MODEL             Override model for reviews (passed as modelID)
   OPENCODE_SERVER_PASSWORD   Auth password if configured
@@ -448,7 +448,7 @@ def main() -> None:
 
 def main_poll(session_id: str, task_id: str, port: int, cwd: str) -> None:
     """Entry point for --poll mode (background process subprocess)."""
-    timeout = _int_env('OPENCODE_TIMEOUT', 300)
+    timeout = _int_env('OPENCODE_TIMEOUT', 1800)
     model = os.environ.get('OPENCODE_MODEL', '') or None
     password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
     run_background_process(port, session_id, task_id, cwd, timeout, model, password)

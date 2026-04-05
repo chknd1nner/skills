@@ -15,7 +15,7 @@ The OpenCode review hook (`intercept-review-agents.py`) intercepts review-type A
 |---|---|---|---|
 | `OPENCODE_PORT` | No | `4096` | Port for OpenCode Server |
 | `OPENCODE_MODEL` | No | (server default) | Model ID for reviews, e.g. `gemini-2.5-pro` |
-| `OPENCODE_TIMEOUT` | No | `300` | Timeout in seconds for the background POST |
+| `OPENCODE_TIMEOUT` | No | `1800` | Timeout in seconds for the background POST |
 | `OPENCODE_STARTUP_TIMEOUT` | No | `10` | Seconds to wait for server to become healthy |
 | `OPENCODE_SERVER_PASSWORD` | No | (none) | Bearer token if OpenCode requires auth |
 | `OPENCODE_DEBUG` | No | `0` | Set to `1` for verbose logging |
