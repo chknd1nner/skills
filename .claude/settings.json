@@ -1,4 +1,9 @@
 {
+  "env": {
+    "OPENCODE_PORT": "4097",
+    "OPENCODE_MODEL": "poe/openai/gpt-5.4",
+    "OPENCODE_DEBUG": "1"
+  },
   "hooks": {
     "PreToolUse": [
       {
