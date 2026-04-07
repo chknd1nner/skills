@@ -1060,3 +1060,369 @@ def test_auth_header_forwarded_to_session_creation(fake_opencode, tmp_path):
     session_reqs = [r for r in server.requests if r['path'] == '/session' and r['method'] == 'POST']
     assert len(session_reqs) >= 1
     assert session_reqs[0]['headers'].get('Authorization') == 'Bearer test-secret-456'
+
+
+# ---------------------------------------------------------------------------
+# TOML config loading
+# ---------------------------------------------------------------------------
+
+_VALID_TOML = """\
+version = 1
+
+[defaults]
+startup_timeout_seconds = 10
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+provider = "poe"
+model = "openai/gpt-5.4"
+timeout_seconds = 1200
+
+[profiles.implementor_sonnet]
+agent = "implementor"
+provider = "poe"
+model = "anthropic/claude-sonnet-4.6"
+timeout_seconds = 3600
+
+[[routes]]
+name = "superpowers-review"
+enabled = true
+match_subagent = "superpowers:code-reviewer"
+profile = "review_gpt54"
+
+[[routes]]
+name = "general-review-prefix"
+enabled = true
+match_subagent = "general-purpose"
+match_description_prefix = "review"
+profile = "review_gpt54"
+"""
+
+
+def _write_toml(tmp_path, content: str) -> str:
+    """Write TOML content to a temp file and return its path."""
+    p = tmp_path / 'opencode-router.toml'
+    p.write_text(content)
+    return str(p)
+
+
+def test_config_valid_parse(tmp_path):
+    """Valid TOML config is parsed and normalized correctly."""
+    path = _write_toml(tmp_path, _VALID_TOML)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+
+    # Defaults
+    assert cfg['defaults']['startup_timeout_seconds'] == 10
+
+    # Profiles
+    assert 'review_gpt54' in cfg['profiles']
+    assert cfg['profiles']['review_gpt54']['agent'] == 'code-reviewer'
+    assert cfg['profiles']['review_gpt54']['provider'] == 'poe'
+    assert cfg['profiles']['review_gpt54']['model'] == 'openai/gpt-5.4'
+    assert cfg['profiles']['review_gpt54']['timeout_seconds'] == 1200
+
+    assert 'implementor_sonnet' in cfg['profiles']
+    assert cfg['profiles']['implementor_sonnet']['agent'] == 'implementor'
+    assert cfg['profiles']['implementor_sonnet']['timeout_seconds'] == 3600
+
+    # Routes
+    assert len(cfg['routes']) == 2
+    r0 = cfg['routes'][0]
+    assert r0['name'] == 'superpowers-review'
+    assert r0['enabled'] is True
+    assert r0['match_subagent'] == 'superpowers:code-reviewer'
+    assert r0['match_description_prefix'] is None
+    assert r0['profile'] == 'review_gpt54'
+
+    r1 = cfg['routes'][1]
+    assert r1['name'] == 'general-review-prefix'
+    assert r1['match_subagent'] == 'general-purpose'
+    assert r1['match_description_prefix'] == 'review'
+    assert r1['profile'] == 'review_gpt54'
+
+
+def test_config_missing_file_returns_none(tmp_path):
+    """Missing config file returns None silently (no error logged)."""
+    cfg = _hook.load_config(str(tmp_path / 'nonexistent.toml'))
+    assert cfg is None
+
+
+def test_config_missing_profile_reference(tmp_path, capsys):
+    """Route references a profile that doesn't exist -> returns None with error."""
+    toml_content = """\
+version = 1
+
+[profiles.real_profile]
+agent = "code-reviewer"
+
+[[routes]]
+name = "bad-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "nonexistent_profile"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert 'nonexistent_profile' in captured.err
+
+
+def test_config_missing_agent_field(tmp_path, capsys):
+    """Profile missing 'agent' field -> returns None with error."""
+    toml_content = """\
+version = 1
+
+[profiles.bad_profile]
+provider = "poe"
+model = "openai/gpt-5.4"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "bad_profile"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "missing required field 'agent'" in captured.err
+
+
+def test_config_provider_without_model(tmp_path, capsys):
+    """Profile sets 'provider' without 'model' -> returns None with error."""
+    toml_content = """\
+version = 1
+
+[profiles.bad_profile]
+agent = "code-reviewer"
+provider = "poe"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "bad_profile"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "'provider' without 'model'" in captured.err
+
+
+def test_config_model_without_provider(tmp_path, capsys):
+    """Profile sets 'model' without 'provider' -> returns None with error."""
+    toml_content = """\
+version = 1
+
+[profiles.bad_profile]
+agent = "code-reviewer"
+model = "openai/gpt-5.4"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "bad_profile"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "'model' without 'provider'" in captured.err
+
+
+def test_config_route_missing_match_subagent(tmp_path, capsys):
+    """Route missing match_subagent -> returns None with error."""
+    toml_content = """\
+version = 1
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+
+[[routes]]
+name = "no-subagent-route"
+profile = "review_gpt54"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert "missing required field 'match_subagent'" in captured.err
+
+
+def test_config_disabled_routes_preserved(tmp_path):
+    """Disabled routes are preserved in the structure (filtering happens at match time)."""
+    toml_content = """\
+version = 1
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+
+[[routes]]
+name = "disabled-route"
+enabled = false
+match_subagent = "superpowers:code-reviewer"
+profile = "review_gpt54"
+
+[[routes]]
+name = "enabled-route"
+enabled = true
+match_subagent = "general-purpose"
+profile = "review_gpt54"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert len(cfg['routes']) == 2
+    assert cfg['routes'][0]['enabled'] is False
+    assert cfg['routes'][0]['name'] == 'disabled-route'
+    assert cfg['routes'][1]['enabled'] is True
+    assert cfg['routes'][1]['name'] == 'enabled-route'
+
+
+def test_config_description_prefix_stored_as_is(tmp_path):
+    """Description prefix is stored as-is; case-insensitive matching is at match time."""
+    toml_content = """\
+version = 1
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+
+[[routes]]
+name = "mixed-case-route"
+match_subagent = "general-purpose"
+match_description_prefix = "Review"
+profile = "review_gpt54"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert cfg['routes'][0]['match_description_prefix'] == 'Review'
+
+
+def test_config_unsupported_version(tmp_path, capsys):
+    """Unsupported version -> returns None with error."""
+    toml_content = """\
+version = 99
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "review_gpt54"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert 'unsupported config version' in captured.err
+
+
+def test_config_missing_version(tmp_path, capsys):
+    """Missing version field -> returns None with error (version is None, not in supported set)."""
+    toml_content = """\
+[profiles.review_gpt54]
+agent = "code-reviewer"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "review_gpt54"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert 'unsupported config version' in captured.err
+
+
+def test_config_invalid_toml_syntax(tmp_path, capsys):
+    """Malformed TOML -> returns None with error."""
+    path = _write_toml(tmp_path, 'this is not [valid toml = }}}')
+    cfg = _hook.load_config(path)
+    assert cfg is None
+    captured = capsys.readouterr()
+    assert 'failed to parse' in captured.err
+
+
+def test_config_profile_with_agent_only(tmp_path):
+    """Profile with only 'agent' (no provider/model) is valid."""
+    toml_content = """\
+version = 1
+
+[profiles.minimal]
+agent = "code-reviewer"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "minimal"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert cfg['profiles']['minimal']['agent'] == 'code-reviewer'
+    assert cfg['profiles']['minimal']['provider'] is None
+    assert cfg['profiles']['minimal']['model'] is None
+
+
+def test_config_provider_model_pair_valid(tmp_path):
+    """Profile with both provider and model is valid."""
+    toml_content = """\
+version = 1
+
+[profiles.full]
+agent = "code-reviewer"
+provider = "poe"
+model = "openai/gpt-5.4"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "full"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert cfg['profiles']['full']['provider'] == 'poe'
+    assert cfg['profiles']['full']['model'] == 'openai/gpt-5.4'
+
+
+def test_config_real_file():
+    """The actual opencode-router.toml in the hooks directory loads successfully."""
+    cfg = _hook.load_config(_hook._CONFIG_PATH)
+    assert cfg is not None
+    assert cfg['defaults']['startup_timeout_seconds'] == 10
+    assert 'review_gpt54' in cfg['profiles']
+    assert len(cfg['routes']) >= 2
+
+
+def test_config_empty_routes_valid(tmp_path):
+    """Config with profiles but no routes is valid (nothing will match)."""
+    toml_content = """\
+version = 1
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert cfg['routes'] == []
+
+
+def test_config_route_without_profile_field(tmp_path):
+    """Route without a profile field is valid (profile defaults to empty string)."""
+    toml_content = """\
+version = 1
+
+[[routes]]
+name = "no-profile-route"
+match_subagent = "superpowers:code-reviewer"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert cfg['routes'][0]['profile'] == ''

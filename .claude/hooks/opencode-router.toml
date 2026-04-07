@@ -1,0 +1,29 @@
+version = 1
+
+[defaults]
+startup_timeout_seconds = 10
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+provider = "poe"
+model = "openai/gpt-5.4"
+timeout_seconds = 1200
+
+[profiles.implementor_sonnet]
+agent = "implementor"
+provider = "poe"
+model = "anthropic/claude-sonnet-4.6"
+timeout_seconds = 3600
+
+[[routes]]
+name = "superpowers-review"
+enabled = true
+match_subagent = "superpowers:code-reviewer"
+profile = "review_gpt54"
+
+[[routes]]
+name = "general-review-prefix"
+enabled = true
+match_subagent = "general-purpose"
+match_description_prefix = "review"
+profile = "review_gpt54"

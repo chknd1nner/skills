@@ -34,6 +34,11 @@ import uuid
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore[no-redef]
+
 # ---------------------------------------------------------------------------
 # Logging — no-op unless OPENCODE_DEBUG=1
 # ---------------------------------------------------------------------------
@@ -99,6 +104,130 @@ def is_review_call(subagent_type: str, description: str) -> bool:
     if subagent_type == 'general-purpose' and description.lower().startswith('review'):
         return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# TOML config loading
+# ---------------------------------------------------------------------------
+_SUPPORTED_VERSIONS = {1}
+_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opencode-router.toml')
+
+
+def _config_error(msg: str) -> None:
+    """Log a configuration error.  Always writes to the log file and stderr
+    so the operator sees the problem regardless of debug mode."""
+    log_file = os.environ.get('OPENCODE_LOG_FILE', '/tmp/opencode-hook-debug.log')
+    try:
+        with open(log_file, 'a') as f:
+            from datetime import datetime, timezone
+            ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
+            f.write(f'[{ts}] CONFIG ERROR: {msg}\n')
+    except OSError:
+        pass
+    print(f'OpenCode hook config error: {msg}', file=sys.stderr)
+
+
+def _validate_profiles(profiles: dict) -> list[str]:
+    """Validate profile definitions.  Returns a list of error strings (empty = valid)."""
+    errors: list[str] = []
+    for name, prof in profiles.items():
+        if 'agent' not in prof:
+            errors.append(f"profile '{name}' missing required field 'agent'")
+        has_provider = 'provider' in prof
+        has_model = 'model' in prof
+        if has_provider and not has_model:
+            errors.append(f"profile '{name}' sets 'provider' without 'model'")
+        if has_model and not has_provider:
+            errors.append(f"profile '{name}' sets 'model' without 'provider'")
+    return errors
+
+
+def _validate_routes(routes: list[dict], profile_names: set[str]) -> list[str]:
+    """Validate route definitions.  Returns a list of error strings (empty = valid)."""
+    errors: list[str] = []
+    for i, route in enumerate(routes):
+        label = route.get('name', f'routes[{i}]')
+        if 'match_subagent' not in route:
+            errors.append(f"route '{label}' missing required field 'match_subagent'")
+        ref = route.get('profile', '')
+        if ref and ref not in profile_names:
+            errors.append(f"route '{label}' references unknown profile '{ref}'")
+    return errors
+
+
+def _normalize_config(raw: dict) -> dict:
+    """Transform parsed TOML into the internal config structure."""
+    defaults = dict(raw.get('defaults', {}))
+
+    profiles: dict = {}
+    for name, prof in raw.get('profiles', {}).items():
+        profiles[name] = {
+            'agent': prof['agent'],
+            'provider': prof.get('provider'),
+            'model': prof.get('model'),
+            'timeout_seconds': prof.get('timeout_seconds'),
+        }
+
+    routes: list[dict] = []
+    for route in raw.get('routes', []):
+        routes.append({
+            'name': route.get('name', ''),
+            'enabled': route.get('enabled', True),
+            'match_subagent': route.get('match_subagent', ''),
+            'match_description_prefix': route.get('match_description_prefix'),
+            'profile': route.get('profile', ''),
+        })
+
+    return {
+        'defaults': defaults,
+        'profiles': profiles,
+        'routes': routes,
+    }
+
+
+def load_config(path: str | None = None) -> dict | None:
+    """Load and validate the TOML config file.
+
+    Returns the normalized config dict, or None if:
+    - the file is missing (silent pass-through)
+    - the file is invalid TOML
+    - validation fails
+
+    None means "fall through to Claude" — the hook should not crash.
+    """
+    config_path = path if path is not None else _CONFIG_PATH
+    try:
+        with open(config_path, 'rb') as f:
+            raw = tomllib.load(f)
+    except FileNotFoundError:
+        return None
+    except (tomllib.TOMLDecodeError, OSError) as exc:
+        _config_error(f'failed to parse {config_path}: {exc}')
+        return None
+
+    # Version gate
+    version = raw.get('version')
+    if version not in _SUPPORTED_VERSIONS:
+        _config_error(f"unsupported config version {version!r} (supported: {_SUPPORTED_VERSIONS})")
+        return None
+
+    # Validate profiles
+    raw_profiles = raw.get('profiles', {})
+    profile_errors = _validate_profiles(raw_profiles)
+    if profile_errors:
+        for err in profile_errors:
+            _config_error(err)
+        return None
+
+    # Validate routes
+    raw_routes = raw.get('routes', [])
+    route_errors = _validate_routes(raw_routes, set(raw_profiles.keys()))
+    if route_errors:
+        for err in route_errors:
+            _config_error(err)
+        return None
+
+    return _normalize_config(raw)
 
 
 # ---------------------------------------------------------------------------
