@@ -34,11 +34,14 @@ def run_poller(
     cwd: str,
     env: dict | None = None,
     timeout: int = 10,
+    config_path: str = '',
+    profile_name: str = '',
 ) -> subprocess.CompletedProcess:
     """Invoke the hook in --poll mode."""
     merged = {**os.environ, **(env or {})}
     return subprocess.run(
-        [sys.executable, SCRIPT, '--poll', session_id, task_id, str(port), cwd],
+        [sys.executable, SCRIPT, '--poll', session_id, task_id, str(port), cwd,
+         config_path, profile_name],
         capture_output=True,
         text=True,
         env=merged,
@@ -141,13 +144,24 @@ class FakeOpenCodeHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.end_headers()
                 return
+
+            # Support raw_response_body for malformed response testing
+            raw_body = self.server.config.get('raw_response_body', None)
+            if raw_body is not None:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(raw_body if isinstance(raw_body, bytes) else raw_body.encode())
+                return
+
             result_text = self.server.config.get('result_text', '## Review\n\nLooks good.')
+            finish = self.server.config.get('finish', 'stop')
             response = {
                 'info': {
                     'id': 'msg_fake123',
                     'sessionID': self.server.config.get('session_id', 'fake-session-123'),
                     'role': 'assistant',
-                    'finish': 'stop',
+                    'finish': finish,
                     'time': {'created': 1000000, 'completed': 1000001},
                     'modelID': 'anthropic/claude-haiku-4.5',
                     'providerID': 'poe',
@@ -169,6 +183,11 @@ class FakeOpenCodeHandler(http.server.BaseHTTPRequestHandler):
                                                'reasoning': 0, 'cache': {'read': 0, 'write': 0}}},
                 ],
             }
+
+            # Allow removing keys for malformed response tests
+            for key in self.server.config.get('response_omit_keys', []):
+                response.pop(key, None)
+
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
@@ -803,6 +822,7 @@ def test_background_writes_complete_on_success(fake_opencode, tmp_path):
         result_text='## Review\n\nCode looks good. Ready to merge.',
     )
     cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
     _hook.write_status(cwd, 'bg-test-1', 'PENDING')
     # Write the prompt file (normally done by main hook)
     import pathlib
@@ -814,7 +834,9 @@ def test_background_writes_complete_on_success(fake_opencode, tmp_path):
         task_id='bg-test-1',
         port=server.port,
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': ''},
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
     )
     assert result.returncode == 0
 
@@ -830,6 +852,7 @@ def test_background_timeout_writes_failed(fake_opencode, tmp_path):
     """POST takes longer than OPENCODE_TIMEOUT → FAILED."""
     server = fake_opencode(message_delay=5)  # delay exceeds timeout
     cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
     _hook.write_status(cwd, 'bg-test-2', 'PENDING')
     import pathlib
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-2.prompt').write_text('Review this.')
@@ -839,8 +862,10 @@ def test_background_timeout_writes_failed(fake_opencode, tmp_path):
         task_id='bg-test-2',
         port=server.port,
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '2', 'OPENCODE_MODEL': ''},
+        env={'OPENCODE_TIMEOUT': '2'},
         timeout=15,
+        config_path=config_path,
+        profile_name='minimal',
     )
     assert result.returncode == 0
 
@@ -851,6 +876,7 @@ def test_background_timeout_writes_failed(fake_opencode, tmp_path):
 def test_background_server_crash_writes_failed(tmp_path):
     """POST can't reach server → FAILED."""
     cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
     _hook.write_status(cwd, 'bg-test-3', 'PENDING')
     import pathlib
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-3.prompt').write_text('Review this.')
@@ -860,8 +886,10 @@ def test_background_server_crash_writes_failed(tmp_path):
         task_id='bg-test-3',
         port=19999,  # nothing listening
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '3', 'OPENCODE_MODEL': ''},
+        env={'OPENCODE_TIMEOUT': '3'},
         timeout=10,
+        config_path=config_path,
+        profile_name='minimal',
     )
     assert result.returncode == 0
 
@@ -873,12 +901,14 @@ def test_background_extracts_multiple_text_parts(fake_opencode, tmp_path):
     """Multiple text parts in response are joined in result file."""
     server = fake_opencode(result_text='## Strengths\n\nClean.\n\n## Issues\n\nMissing error handling.')
     cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
     _hook.write_status(cwd, 'bg-test-4', 'PENDING')
     import pathlib
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-4.prompt').write_text('Review this.')
 
     run_poller(session_id='sess-abc', task_id='bg-test-4', port=server.port,
-               cwd=cwd, env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': ''})
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '10'},
+               config_path=config_path, profile_name='minimal')
 
     result_content = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-4.result.md').read_text()
     assert 'Clean.' in result_content
@@ -905,8 +935,10 @@ def test_background_sse_events_written_to_progress(fake_opencode, tmp_path):
     import pathlib
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-5.prompt').write_text('Review this.')
 
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
     run_poller(session_id='sess-abc', task_id='bg-test-5', port=server.port,
-               cwd=cwd, env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': ''})
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '10'},
+               config_path=config_path, profile_name='minimal')
 
     progress_file = tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-5.progress.md'
     assert progress_file.exists()
@@ -925,8 +957,10 @@ def test_background_prompt_not_accepted(fake_opencode, tmp_path):
     import pathlib
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-6.prompt').write_text('Review this.')
 
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
     run_poller(session_id='sess-abc', task_id='bg-test-6', port=server.port,
-               cwd=cwd, env={'OPENCODE_TIMEOUT': '5', 'OPENCODE_MODEL': ''})
+               cwd=cwd, env={'OPENCODE_TIMEOUT': '5'},
+               config_path=config_path, profile_name='minimal')
 
     status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'bg-test-6.status').read_text()
     assert status.strip() == 'FAILED'
@@ -972,10 +1006,11 @@ def test_invalid_port_uses_default():
     assert result.returncode == 0
 
 
-def test_model_override_included_in_prompt(fake_opencode, tmp_path):
-    """OPENCODE_MODEL env var appears as modelID in the background process POST body."""
+def test_model_override_included_in_body(fake_opencode, tmp_path):
+    """Profile with provider+model sends agent and model object in POST body."""
     server = fake_opencode(session_id='sess-model', result_text='## Review\n\nLooks good.')
     cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _FULL_PROFILE_TOML)
     _hook.write_status(cwd, 'model-test', 'PENDING')
     import pathlib
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'model-test.prompt').write_text('Review this.')
@@ -985,21 +1020,27 @@ def test_model_override_included_in_prompt(fake_opencode, tmp_path):
         task_id='model-test',
         port=server.port,
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': 'gemini-2.5-pro'},
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='review_gpt54',
     )
     assert result.returncode == 0
-    # Verify modelID was sent in the POST body
+    # Verify agent and model object were sent in the POST body
     msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
     assert len(msg_reqs) == 1
-    assert msg_reqs[0]['body']['modelID'] == 'gemini-2.5-pro'
-    parts = msg_reqs[0]['body']['parts']
+    body = msg_reqs[0]['body']
+    assert body['agent'] == 'code-reviewer'
+    assert body['model'] == {'providerID': 'poe', 'modelID': 'openai/gpt-5.4'}
+    assert 'modelID' not in body  # no flat modelID field
+    parts = body['parts']
     assert any(p['type'] == 'text' and p['text'] for p in parts)
 
 
 def test_prompt_without_model_override(fake_opencode, tmp_path):
-    """Without OPENCODE_MODEL, POST body has no modelID field."""
+    """Profile with agent only (no provider/model) → agent sent, no model object."""
     server = fake_opencode(session_id='sess-nomodel', result_text='## Review\n\nLooks good.')
     cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
     _hook.write_status(cwd, 'nomodel-test', 'PENDING')
     import pathlib
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'nomodel-test.prompt').write_text('Review this.')
@@ -1009,17 +1050,23 @@ def test_prompt_without_model_override(fake_opencode, tmp_path):
         task_id='nomodel-test',
         port=server.port,
         cwd=cwd,
-        env={'OPENCODE_TIMEOUT': '10', 'OPENCODE_MODEL': ''},
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
     )
     msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
     assert len(msg_reqs) == 1
-    assert 'modelID' not in msg_reqs[0]['body']
+    body = msg_reqs[0]['body']
+    assert body['agent'] == 'code-reviewer'
+    assert 'model' not in body
+    assert 'modelID' not in body
 
 
 def test_auth_header_forwarded_to_message(fake_opencode, tmp_path):
     """OPENCODE_SERVER_PASSWORD is sent as Bearer token on /message POST."""
     server = fake_opencode(session_id='sess-auth', result_text='## Review\n\nOk.')
     cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
     _hook.write_status(cwd, 'auth-test', 'PENDING')
     import pathlib
     (tmp_path / 'project' / '.opencode' / 'tasks' / 'auth-test.prompt').write_text('Review this.')
@@ -1031,9 +1078,10 @@ def test_auth_header_forwarded_to_message(fake_opencode, tmp_path):
         cwd=cwd,
         env={
             'OPENCODE_TIMEOUT': '10',
-            'OPENCODE_MODEL': '',
             'OPENCODE_SERVER_PASSWORD': 'test-secret-123',
         },
+        config_path=config_path,
+        profile_name='minimal',
     )
 
     # Check /message POST has auth header
@@ -1104,6 +1152,35 @@ def _write_toml(tmp_path, content: str) -> str:
     p = tmp_path / 'opencode-router.toml'
     p.write_text(content)
     return str(p)
+
+
+# Minimal TOML with agent-only profile (no provider/model override)
+_AGENT_ONLY_TOML = """\
+version = 1
+
+[profiles.minimal]
+agent = "code-reviewer"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "minimal"
+"""
+
+# TOML with full provider+model override
+_FULL_PROFILE_TOML = """\
+version = 1
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+provider = "poe"
+model = "openai/gpt-5.4"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "review_gpt54"
+"""
 
 
 def test_config_valid_parse(tmp_path):
@@ -1682,3 +1759,187 @@ profile = "review_gpt54"
     with pytest.raises(SystemExit) as exc_info:
         _hook.main()
     assert exc_info.value.code == 0
+
+
+# ---------------------------------------------------------------------------
+# Payload shape — agent + model dispatch
+# ---------------------------------------------------------------------------
+
+def test_payload_agent_always_sent(fake_opencode, tmp_path):
+    """Agent field is always present in POST body for a matched route."""
+    server = fake_opencode(session_id='sess-agent', result_text='Ok.')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
+    _hook.write_status(cwd, 'agent-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'agent-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-agent',
+        task_id='agent-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
+    )
+    msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
+    assert len(msg_reqs) == 1
+    assert msg_reqs[0]['body']['agent'] == 'code-reviewer'
+
+
+def test_payload_model_object_sent_when_provider_model_present(fake_opencode, tmp_path):
+    """Profile with provider+model → model object with providerID/modelID is sent."""
+    server = fake_opencode(session_id='sess-full', result_text='Ok.')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _FULL_PROFILE_TOML)
+    _hook.write_status(cwd, 'full-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'full-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-full',
+        task_id='full-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='review_gpt54',
+    )
+    msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
+    assert len(msg_reqs) == 1
+    body = msg_reqs[0]['body']
+    assert body['agent'] == 'code-reviewer'
+    assert body['model'] == {'providerID': 'poe', 'modelID': 'openai/gpt-5.4'}
+
+
+def test_payload_model_omitted_when_agent_only(fake_opencode, tmp_path):
+    """Profile with agent only → no model object in POST body."""
+    server = fake_opencode(session_id='sess-agentonly', result_text='Ok.')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
+    _hook.write_status(cwd, 'agentonly-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'agentonly-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-agentonly',
+        task_id='agentonly-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
+    )
+    msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
+    assert len(msg_reqs) == 1
+    body = msg_reqs[0]['body']
+    assert body['agent'] == 'code-reviewer'
+    assert 'model' not in body
+    assert 'modelID' not in body
+
+
+# ---------------------------------------------------------------------------
+# Malformed response handling
+# ---------------------------------------------------------------------------
+
+def test_empty_response_body_produces_failed(fake_opencode, tmp_path):
+    """200 OK with empty body → FAILED (e.g., invalid agent name)."""
+    server = fake_opencode(session_id='sess-empty', raw_response_body=b'')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
+    _hook.write_status(cwd, 'empty-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'empty-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-empty',
+        task_id='empty-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
+    )
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'empty-test.status').read_text()
+    assert status.strip() == 'FAILED'
+
+
+def test_invalid_json_body_produces_failed(fake_opencode, tmp_path):
+    """200 OK with invalid JSON body → FAILED."""
+    server = fake_opencode(session_id='sess-badjson', raw_response_body=b'not valid json {{{')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
+    _hook.write_status(cwd, 'badjson-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'badjson-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-badjson',
+        task_id='badjson-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
+    )
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'badjson-test.status').read_text()
+    assert status.strip() == 'FAILED'
+
+
+def test_finish_not_stop_produces_failed(fake_opencode, tmp_path):
+    """Response with finish != 'stop' → FAILED."""
+    server = fake_opencode(session_id='sess-badfinish', finish='error')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
+    _hook.write_status(cwd, 'badfinish-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'badfinish-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-badfinish',
+        task_id='badfinish-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
+    )
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'badfinish-test.status').read_text()
+    assert status.strip() == 'FAILED'
+
+
+def test_missing_info_in_response_produces_failed(fake_opencode, tmp_path):
+    """Response JSON with no 'info' key → FAILED."""
+    server = fake_opencode(session_id='sess-noinfo', response_omit_keys=['info'])
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
+    _hook.write_status(cwd, 'noinfo-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'noinfo-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-noinfo',
+        task_id='noinfo-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
+    )
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'noinfo-test.status').read_text()
+    assert status.strip() == 'FAILED'
+
+
+def test_missing_parts_in_response_produces_failed(fake_opencode, tmp_path):
+    """Response JSON with no 'parts' key → FAILED."""
+    server = fake_opencode(session_id='sess-noparts', response_omit_keys=['parts'])
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _AGENT_ONLY_TOML)
+    _hook.write_status(cwd, 'noparts-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'noparts-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-noparts',
+        task_id='noparts-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='minimal',
+    )
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'noparts-test.status').read_text()
+    assert status.strip() == 'FAILED'

@@ -21,7 +21,6 @@ Environment variables:
   OPENCODE_PORT              OpenCode Server port (default: 4096)
   OPENCODE_TIMEOUT           Background process HTTP timeout in seconds (default: 1800)
   OPENCODE_STARTUP_TIMEOUT   Server startup timeout in seconds (default: 10)
-  OPENCODE_MODEL             Override model for reviews (passed as modelID)
   OPENCODE_SERVER_PASSWORD   Auth password if configured
   OPENCODE_DEBUG=1           Enable debug logging (default: off)
   OPENCODE_LOG_FILE          Log file path (default: /tmp/opencode-hook-debug.log)
@@ -523,7 +522,7 @@ def run_background_process(
     task_id: str,
     cwd: str,
     timeout: int,
-    model: str | None = None,
+    profile: dict,
     password: str | None = None,
 ) -> None:
     """
@@ -550,11 +549,17 @@ def run_background_process(
     )
     sse.start()
 
-    # Send blocking POST
+    # Send blocking POST — body uses agent + optional model object from profile
     url = f'http://127.0.0.1:{port}/session/{session_id}/message'
-    body: dict = {'parts': [{'type': 'text', 'text': prompt}]}
-    if model:
-        body['modelID'] = model
+    body: dict = {
+        'agent': profile.get('agent', ''),
+        'parts': [{'type': 'text', 'text': prompt}],
+    }
+    if profile.get('provider') and profile.get('model'):
+        body['model'] = {
+            'providerID': profile['provider'],
+            'modelID': profile['model'],
+        }
     data = json.dumps(body).encode()
     req = Request(url, data=data, headers={'Content-Type': 'application/json'})
     if password:
@@ -562,8 +567,8 @@ def run_background_process(
 
     try:
         with urlopen(req, timeout=timeout) as resp:
-            response = json.loads(resp.read())
-    except (URLError, OSError, json.JSONDecodeError) as e:
+            raw_body = resp.read()
+    except (URLError, OSError) as e:
         log(f'bg: POST failed | task={task_id} | err={e}')
         stop_event.set()
         sse.join(timeout=2)
@@ -574,8 +579,31 @@ def run_background_process(
     stop_event.set()
     sse.join(timeout=5)
 
+    # Parse and validate response
+    if not raw_body:
+        log(f'bg: empty response body | task={task_id}')
+        write_status(cwd, task_id, 'FAILED')
+        return
+
+    try:
+        response = json.loads(raw_body)
+    except (json.JSONDecodeError, ValueError) as e:
+        log(f'bg: invalid JSON response | task={task_id} | err={e}')
+        write_status(cwd, task_id, 'FAILED')
+        return
+
+    if 'info' not in response:
+        log(f'bg: missing info in response | task={task_id}')
+        write_status(cwd, task_id, 'FAILED')
+        return
+
+    if 'parts' not in response:
+        log(f'bg: missing parts in response | task={task_id}')
+        write_status(cwd, task_id, 'FAILED')
+        return
+
     # Verify terminal state
-    finish = response.get('info', {}).get('finish', '')
+    finish = response['info'].get('finish', '')
     if finish != 'stop':
         log(f'bg: unexpected finish={finish!r} | task={task_id}')
         write_status(cwd, task_id, 'FAILED')
@@ -584,7 +612,7 @@ def run_background_process(
     # Extract text parts and write result
     text_parts = [
         p['text']
-        for p in response.get('parts', [])
+        for p in response['parts']
         if p.get('type') == 'text' and p.get('text')
     ]
     result_text = '\n\n'.join(text_parts)
@@ -626,8 +654,11 @@ def main() -> None:
 
     # Read config
     startup_timeout = _int_env('OPENCODE_STARTUP_TIMEOUT', 10)
-    model = os.environ.get('OPENCODE_MODEL', '') or None
     password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
+
+    # Determine config path and profile name for the poller subprocess
+    config_path = _CONFIG_PATH
+    profile_name = matched_route.get('profile', '')
 
     # Resolve port (env override → port file → auto-select)
     port, port_source = resolve_port(cwd)
@@ -668,7 +699,8 @@ def main() -> None:
         log_file = os.environ.get('OPENCODE_LOG_FILE', '/tmp/opencode-hook-debug.log')
         poller_stderr = open(log_file, 'a') if _DEBUG else subprocess.DEVNULL
         subprocess.Popen(
-            [sys.executable, __file__, '--poll', session_id, task_id, str(port), cwd],
+            [sys.executable, __file__, '--poll', session_id, task_id, str(port), cwd,
+             config_path, profile_name],
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=poller_stderr,
@@ -699,22 +731,30 @@ def main() -> None:
     print(json.dumps(response))
 
 
-def main_poll(session_id: str, task_id: str, port: int, cwd: str) -> None:
+def main_poll(session_id: str, task_id: str, port: int, cwd: str,
+              config_path: str, profile_name: str) -> None:
     """Entry point for --poll mode (background process subprocess)."""
     timeout = _int_env('OPENCODE_TIMEOUT', 1800)
-    model = os.environ.get('OPENCODE_MODEL', '') or None
     password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
-    run_background_process(port, session_id, task_id, cwd, timeout, model, password)
+
+    # Reload config in the child process and look up the profile
+    config = load_config(config_path)
+    profile = {}
+    if config is not None:
+        profile = config.get('profiles', {}).get(profile_name, {})
+
+    run_background_process(port, session_id, task_id, cwd, timeout, profile, password)
 
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--poll':
-        if len(sys.argv) != 6:
+        if len(sys.argv) != 8:
             print(
-                f'Usage: {sys.argv[0]} --poll <session_id> <task_id> <port> <cwd>',
+                f'Usage: {sys.argv[0]} --poll <session_id> <task_id> <port> <cwd> <config_path> <profile_name>',
                 file=sys.stderr,
             )
             sys.exit(1)
-        main_poll(sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5])
+        main_poll(sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5],
+                  sys.argv[6], sys.argv[7])
     else:
         main()
