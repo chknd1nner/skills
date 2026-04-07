@@ -1426,3 +1426,259 @@ match_subagent = "superpowers:code-reviewer"
     cfg = _hook.load_config(path)
     assert cfg is not None
     assert cfg['routes'][0]['profile'] == ''
+
+
+# ---------------------------------------------------------------------------
+# Route matching (find_matching_route)
+# ---------------------------------------------------------------------------
+
+_ROUTE_CONFIG = {
+    'defaults': {},
+    'profiles': {
+        'review_gpt54': {
+            'agent': 'code-reviewer',
+            'provider': 'poe',
+            'model': 'openai/gpt-5.4',
+            'timeout_seconds': 1200,
+        },
+        'implementor_sonnet': {
+            'agent': 'implementor',
+            'provider': 'poe',
+            'model': 'anthropic/claude-sonnet-4.6',
+            'timeout_seconds': 3600,
+        },
+    },
+    'routes': [
+        {
+            'name': 'superpowers-review',
+            'enabled': True,
+            'match_subagent': 'superpowers:code-reviewer',
+            'match_description_prefix': None,
+            'profile': 'review_gpt54',
+        },
+        {
+            'name': 'general-review-prefix',
+            'enabled': True,
+            'match_subagent': 'general-purpose',
+            'match_description_prefix': 'review',
+            'profile': 'review_gpt54',
+        },
+    ],
+}
+
+
+def test_route_match_code_reviewer():
+    """Exact subagent_type 'superpowers:code-reviewer' matches the first route."""
+    result = _hook.find_matching_route(_ROUTE_CONFIG, 'superpowers:code-reviewer', 'Review impl')
+    assert result is not None
+    route, profile = result
+    assert route['name'] == 'superpowers-review'
+    assert profile['agent'] == 'code-reviewer'
+    assert profile['model'] == 'openai/gpt-5.4'
+
+
+def test_route_match_general_purpose_review_prefix():
+    """general-purpose + description starting with 'review' matches the second route."""
+    result = _hook.find_matching_route(_ROUTE_CONFIG, 'general-purpose', 'Review the code')
+    assert result is not None
+    route, profile = result
+    assert route['name'] == 'general-review-prefix'
+    assert profile['agent'] == 'code-reviewer'
+
+
+def test_route_match_description_prefix_case_insensitive():
+    """match_description_prefix is case-insensitive."""
+    result = _hook.find_matching_route(_ROUTE_CONFIG, 'general-purpose', 'REVIEW THE CODE')
+    assert result is not None
+    route, _ = result
+    assert route['name'] == 'general-review-prefix'
+
+    result2 = _hook.find_matching_route(_ROUTE_CONFIG, 'general-purpose', 'rEvIeW mixed case')
+    assert result2 is not None
+    route2, _ = result2
+    assert route2['name'] == 'general-review-prefix'
+
+
+def test_route_no_match_falls_through():
+    """No matching route returns None."""
+    result = _hook.find_matching_route(_ROUTE_CONFIG, 'Explore', 'Find relevant files')
+    assert result is None
+
+
+def test_route_no_match_general_purpose_wrong_prefix():
+    """general-purpose with non-review description does not match."""
+    result = _hook.find_matching_route(_ROUTE_CONFIG, 'general-purpose', 'Explore the codebase')
+    assert result is None
+
+
+def test_route_first_match_wins():
+    """When two routes could match, the first one declared wins."""
+    config = {
+        'defaults': {},
+        'profiles': {
+            'profile_a': {'agent': 'agent-a', 'provider': None, 'model': None, 'timeout_seconds': None},
+            'profile_b': {'agent': 'agent-b', 'provider': None, 'model': None, 'timeout_seconds': None},
+        },
+        'routes': [
+            {
+                'name': 'first-route',
+                'enabled': True,
+                'match_subagent': 'superpowers:code-reviewer',
+                'match_description_prefix': None,
+                'profile': 'profile_a',
+            },
+            {
+                'name': 'second-route',
+                'enabled': True,
+                'match_subagent': 'superpowers:code-reviewer',
+                'match_description_prefix': None,
+                'profile': 'profile_b',
+            },
+        ],
+    }
+    result = _hook.find_matching_route(config, 'superpowers:code-reviewer', 'Review impl')
+    assert result is not None
+    route, profile = result
+    assert route['name'] == 'first-route'
+    assert profile['agent'] == 'agent-a'
+
+
+def test_route_disabled_route_skipped():
+    """Disabled routes are skipped even if they would otherwise match."""
+    config = {
+        'defaults': {},
+        'profiles': {
+            'profile_a': {'agent': 'agent-a', 'provider': None, 'model': None, 'timeout_seconds': None},
+            'profile_b': {'agent': 'agent-b', 'provider': None, 'model': None, 'timeout_seconds': None},
+        },
+        'routes': [
+            {
+                'name': 'disabled-route',
+                'enabled': False,
+                'match_subagent': 'superpowers:code-reviewer',
+                'match_description_prefix': None,
+                'profile': 'profile_a',
+            },
+            {
+                'name': 'enabled-route',
+                'enabled': True,
+                'match_subagent': 'superpowers:code-reviewer',
+                'match_description_prefix': None,
+                'profile': 'profile_b',
+            },
+        ],
+    }
+    result = _hook.find_matching_route(config, 'superpowers:code-reviewer', 'Review impl')
+    assert result is not None
+    route, profile = result
+    assert route['name'] == 'enabled-route'
+    assert profile['agent'] == 'agent-b'
+
+
+def test_route_disabled_all_routes_no_match():
+    """If all matching routes are disabled, returns None."""
+    config = {
+        'defaults': {},
+        'profiles': {
+            'profile_a': {'agent': 'agent-a', 'provider': None, 'model': None, 'timeout_seconds': None},
+        },
+        'routes': [
+            {
+                'name': 'disabled-route',
+                'enabled': False,
+                'match_subagent': 'superpowers:code-reviewer',
+                'match_description_prefix': None,
+                'profile': 'profile_a',
+            },
+        ],
+    }
+    result = _hook.find_matching_route(config, 'superpowers:code-reviewer', 'Review impl')
+    assert result is None
+
+
+def test_route_missing_profile_returns_empty_dict():
+    """Route referencing empty profile string resolves to empty dict."""
+    config = {
+        'defaults': {},
+        'profiles': {},
+        'routes': [
+            {
+                'name': 'no-profile-route',
+                'enabled': True,
+                'match_subagent': 'superpowers:code-reviewer',
+                'match_description_prefix': None,
+                'profile': '',
+            },
+        ],
+    }
+    result = _hook.find_matching_route(config, 'superpowers:code-reviewer', 'Review impl')
+    assert result is not None
+    route, profile = result
+    assert route['name'] == 'no-profile-route'
+    assert profile == {}
+
+
+def test_route_empty_routes_no_match():
+    """Config with no routes returns None."""
+    config = {'defaults': {}, 'profiles': {}, 'routes': []}
+    result = _hook.find_matching_route(config, 'superpowers:code-reviewer', 'Review impl')
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Route matching — integration via subprocess (main hook)
+# ---------------------------------------------------------------------------
+
+def test_hook_no_config_passes_through(tmp_path, monkeypatch):
+    """Missing config file → pass through silently (exit 0, no output)."""
+    # Point config path to a non-existent file
+    monkeypatch.setattr(_hook, '_CONFIG_PATH', str(tmp_path / 'nonexistent.toml'))
+    # Use subprocess-free approach: call main() directly with patched stdin
+    import io
+    payload = make_payload('superpowers:code-reviewer')
+    monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps(payload)))
+
+    with pytest.raises(SystemExit) as exc_info:
+        _hook.main()
+    assert exc_info.value.code == 0
+
+
+def test_hook_bypass_before_config_loading(monkeypatch):
+    """Bypass flag short-circuits before config is loaded."""
+    # Make config loading explode if called
+    def boom(path=None):
+        raise RuntimeError('config should not be loaded when bypass is active')
+    monkeypatch.setattr(_hook, 'load_config', boom)
+
+    import io
+    payload = make_payload('superpowers:code-reviewer', '[BYPASS_HOOK] Review implementation')
+    monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps(payload)))
+
+    with pytest.raises(SystemExit) as exc_info:
+        _hook.main()
+    assert exc_info.value.code == 0
+
+
+def test_hook_no_route_match_passes_through(tmp_path, monkeypatch):
+    """Subagent type with no matching route → pass through silently."""
+    toml_content = """\
+version = 1
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+
+[[routes]]
+name = "superpowers-review"
+match_subagent = "superpowers:code-reviewer"
+profile = "review_gpt54"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    monkeypatch.setattr(_hook, '_CONFIG_PATH', path)
+
+    import io
+    payload = make_payload('Explore', 'Find relevant files')
+    monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps(payload)))
+
+    with pytest.raises(SystemExit) as exc_info:
+        _hook.main()
+    assert exc_info.value.code == 0

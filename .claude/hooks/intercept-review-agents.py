@@ -2,14 +2,20 @@
 """
 intercept-review-agents.py (v2 — OpenCode Async Bridge)
 
-PreToolUse hook: intercepts review-type Agent calls and dispatches them
-to OpenCode Server asynchronously. Results delivered via file handshake.
+PreToolUse hook: intercepts Agent calls matching TOML-configured routes and
+dispatches them to OpenCode Server asynchronously. Results delivered via file
+handshake.
 
-Detection patterns:
-  - description.startswith('[BYPASS_HOOK]') → pass through immediately
-  - subagent_type == "superpowers:code-reviewer" → intercept
-  - subagent_type == "general-purpose" AND description starts with "review" → intercept
-  - Everything else → pass through
+Detection flow:
+  1. description.startswith('[BYPASS_HOOK]') → pass through immediately
+  2. Load opencode-router.toml → if missing/invalid, pass through
+  3. Match subagent_type + description against ordered routes → first match wins
+  4. No match → pass through
+
+Route matching (opencode-router.toml):
+  - match_subagent     — exact string equality (required)
+  - match_description_prefix — case-insensitive startswith() (optional)
+  - enabled: false     — route is skipped
 
 Environment variables:
   OPENCODE_PORT              OpenCode Server port (default: 4096)
@@ -97,13 +103,28 @@ def is_bypass(description: str) -> bool:
     return description.startswith('[BYPASS_HOOK]')
 
 
-def is_review_call(subagent_type: str, description: str) -> bool:
-    """Detect review-type agent calls."""
-    if subagent_type == 'superpowers:code-reviewer':
-        return True
-    if subagent_type == 'general-purpose' and description.lower().startswith('review'):
-        return True
-    return False
+def find_matching_route(config: dict, subagent_type: str, description: str) -> tuple[dict, dict] | None:
+    """Return (route, profile) for the first matching route, or None.
+
+    Match logic per route:
+    - ``match_subagent`` — exact string equality (required on every route)
+    - ``match_description_prefix`` — case-insensitive ``startswith()`` (optional;
+      omitted means unconstrained)
+    - ``enabled: false`` routes are skipped
+    """
+    for route in config.get('routes', []):
+        if not route.get('enabled', True):
+            continue
+        if route.get('match_subagent') != subagent_type:
+            continue
+        prefix = route.get('match_description_prefix')
+        if prefix is not None and not description.lower().startswith(prefix.lower()):
+            continue
+        # Resolve the referenced profile (may be empty string → empty dict)
+        profile_name = route.get('profile', '')
+        profile = config.get('profiles', {}).get(profile_name, {})
+        return route, profile
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -588,11 +609,20 @@ def main() -> None:
         log(f'bypass flag detected, passing through | desc={description[:60]}')
         sys.exit(0)
 
-    if not is_review_call(subagent_type, description):
-        log(f'pass-through | type={subagent_type} | desc={description[:60]}')
+    # Load config — if missing or invalid, pass through silently
+    config = load_config()
+    if config is None:
+        log(f'no config (missing or invalid), passing through | type={subagent_type}')
         sys.exit(0)
 
-    log(f'intercepted | type={subagent_type} | desc={description[:60]}')
+    # Find first matching route
+    match = find_matching_route(config, subagent_type, description)
+    if match is None:
+        log(f'no route matched, passing through | type={subagent_type} | desc={description[:60]}')
+        sys.exit(0)
+
+    matched_route, matched_profile = match
+    log(f'intercepted | route={matched_route.get("name", "?")} | type={subagent_type} | desc={description[:60]}')
 
     # Read config
     startup_timeout = _int_env('OPENCODE_STARTUP_TIMEOUT', 10)
