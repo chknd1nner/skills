@@ -1491,7 +1491,7 @@ agent = "code-reviewer"
 
 
 def test_config_route_without_profile_field(tmp_path):
-    """Route without a profile field is valid (profile defaults to empty string)."""
+    """Route without a profile field is rejected."""
     toml_content = """\
 version = 1
 
@@ -1501,8 +1501,29 @@ match_subagent = "superpowers:code-reviewer"
 """
     path = _write_toml(tmp_path, toml_content)
     cfg = _hook.load_config(path)
-    assert cfg is not None
-    assert cfg['routes'][0]['profile'] == ''
+    assert cfg is None
+
+
+def test_config_profiles_wrong_type(tmp_path):
+    """profiles as a list instead of table → returns None."""
+    toml_content = """\
+version = 1
+profiles = ["not", "a", "table"]
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
+
+
+def test_config_routes_wrong_type(tmp_path):
+    """routes as a string instead of array → returns None."""
+    toml_content = """\
+version = 1
+routes = "not-an-array"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is None
 
 
 # ---------------------------------------------------------------------------

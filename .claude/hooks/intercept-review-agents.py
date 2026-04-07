@@ -169,6 +169,8 @@ def _validate_routes(routes: list[dict], profile_names: set[str]) -> list[str]:
         label = route.get('name', f'routes[{i}]')
         if 'match_subagent' not in route:
             errors.append(f"route '{label}' missing required field 'match_subagent'")
+        if 'profile' not in route:
+            errors.append(f"route '{label}' missing required field 'profile'")
         ref = route.get('profile', '')
         if ref and ref not in profile_names:
             errors.append(f"route '{label}' references unknown profile '{ref}'")
@@ -231,8 +233,17 @@ def load_config(path: str | None = None) -> dict | None:
         _config_error(f"unsupported config version {version!r} (supported: {_SUPPORTED_VERSIONS})")
         return None
 
-    # Validate profiles
+    # Type guards — malformed TOML can produce unexpected types
     raw_profiles = raw.get('profiles', {})
+    if not isinstance(raw_profiles, dict):
+        _config_error(f"'profiles' must be a table, got {type(raw_profiles).__name__}")
+        return None
+    raw_routes = raw.get('routes', [])
+    if not isinstance(raw_routes, list):
+        _config_error(f"'routes' must be an array, got {type(raw_routes).__name__}")
+        return None
+
+    # Validate profiles
     profile_errors = _validate_profiles(raw_profiles)
     if profile_errors:
         for err in profile_errors:
@@ -240,7 +251,6 @@ def load_config(path: str | None = None) -> dict | None:
         return None
 
     # Validate routes
-    raw_routes = raw.get('routes', [])
     route_errors = _validate_routes(raw_routes, set(raw_profiles.keys()))
     if route_errors:
         for err in route_errors:
