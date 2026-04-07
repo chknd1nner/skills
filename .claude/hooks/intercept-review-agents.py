@@ -289,7 +289,7 @@ def read_status(cwd: str, task_id: str) -> str:
 
 
 def write_result(cwd: str, task_id: str, content: str) -> None:
-    """Write review content to {task_id}.result.md file (atomic via rename)."""
+    """Write result content to {task_id}.result.md file (atomic via rename)."""
     d = tasks_dir(cwd)
     os.makedirs(d, exist_ok=True)
     final = os.path.join(d, f'{task_id}.result.md')
@@ -718,15 +718,16 @@ def main() -> None:
         )
 
     # Build and return deny response
+    route_name = matched_route.get('name', 'unnamed')
     reason = (
-        'A PreToolUse hook dispatched this review to OpenCode Server (async). '
-        'The review is running in the background. When you\'re ready for the result, read '
+        f'A PreToolUse hook dispatched this task to OpenCode Server (async, route: {route_name}). '
+        'The task is running in the background. When you\'re ready for the result, read '
         f'`.opencode/tasks/{task_id}.status`. When it says COMPLETE, read '
         f'`.opencode/tasks/{task_id}.result.md` and continue the workflow as normal. '
         'If it says FAILED, re-invoke the original agent call with [BYPASS_HOOK] '
         'prepended to the description field \u2014 the hook will let it through to the '
         'Claude agent this time.\n\n'
-        'The review typically takes 30\u201360 seconds. Continue with your current work '
+        'The task typically takes 30\u201360 seconds. Continue with your current work '
         'and check back after completing your next task.'
     )
 
