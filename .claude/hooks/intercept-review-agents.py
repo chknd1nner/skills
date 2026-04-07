@@ -662,8 +662,9 @@ def main() -> None:
     matched_route, matched_profile = match
     log(f'intercepted | route={matched_route.get("name", "?")} | type={subagent_type} | desc={description[:60]}')
 
-    # Read config
-    startup_timeout = _int_env('OPENCODE_STARTUP_TIMEOUT', 10)
+    # Startup timeout: env override → TOML defaults → hard-coded
+    toml_startup = config.get('defaults', {}).get('startup_timeout_seconds', 10)
+    startup_timeout = _int_env('OPENCODE_STARTUP_TIMEOUT', toml_startup)
     password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
 
     # Determine config path and profile name for the poller subprocess
@@ -744,7 +745,6 @@ def main() -> None:
 def main_poll(session_id: str, task_id: str, port: int, cwd: str,
               config_path: str, profile_name: str) -> None:
     """Entry point for --poll mode (background process subprocess)."""
-    timeout = _int_env('OPENCODE_TIMEOUT', 1800)
     password = os.environ.get('OPENCODE_SERVER_PASSWORD', '') or None
 
     # Reload config in the child process and look up the profile
@@ -752,6 +752,10 @@ def main_poll(session_id: str, task_id: str, port: int, cwd: str,
     profile = {}
     if config is not None:
         profile = config.get('profiles', {}).get(profile_name, {})
+
+    # Request timeout: env override → profile → hard-coded
+    toml_timeout = profile.get('timeout_seconds', 1800) or 1800
+    timeout = _int_env('OPENCODE_TIMEOUT', toml_timeout)
 
     run_background_process(port, session_id, task_id, cwd, timeout, profile, password)
 

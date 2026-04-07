@@ -1964,3 +1964,207 @@ def test_missing_parts_in_response_produces_failed(fake_opencode, tmp_path):
     )
     status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'noparts-test.status').read_text()
     assert status.strip() == 'FAILED'
+
+
+# ---------------------------------------------------------------------------
+# Timeout resolution (profile → defaults → env override)
+# ---------------------------------------------------------------------------
+
+# TOML with profile-level timeout_seconds
+_TIMEOUT_PROFILE_TOML = """\
+version = 1
+
+[defaults]
+startup_timeout_seconds = 15
+
+[profiles.short_timeout]
+agent = "code-reviewer"
+timeout_seconds = 2
+
+[profiles.no_timeout]
+agent = "code-reviewer"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "short_timeout"
+"""
+
+
+def test_poller_uses_profile_timeout(fake_opencode, tmp_path):
+    """Profile timeout_seconds is used when OPENCODE_TIMEOUT env var is absent.
+
+    Server delays 5s but profile says 2s → times out → FAILED.
+    """
+    server = fake_opencode(session_id='sess-prof-timeout', message_delay=5)
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _TIMEOUT_PROFILE_TOML)
+    _hook.write_status(cwd, 'prof-timeout-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'prof-timeout-test.prompt').write_text('Review this.')
+
+    # No OPENCODE_TIMEOUT in env → profile's timeout_seconds = 2 is used
+    env = {k: v for k, v in os.environ.items() if k != 'OPENCODE_TIMEOUT'}
+    result = run_poller(
+        session_id='sess-prof-timeout',
+        task_id='prof-timeout-test',
+        port=server.port,
+        cwd=cwd,
+        env=env,
+        timeout=15,
+        config_path=config_path,
+        profile_name='short_timeout',
+    )
+    assert result.returncode == 0
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'prof-timeout-test.status').read_text()
+    assert status.strip() == 'FAILED'
+
+
+def test_poller_falls_back_to_hardcoded_when_profile_has_no_timeout(fake_opencode, tmp_path):
+    """Profile without timeout_seconds falls back to 1800 hard-coded default.
+
+    Verify by checking the poller succeeds with a fast server (the default 1800s
+    is far longer than the server's response time).
+    """
+    server = fake_opencode(session_id='sess-default-timeout', result_text='## OK')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _TIMEOUT_PROFILE_TOML)
+    _hook.write_status(cwd, 'default-timeout-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'default-timeout-test.prompt').write_text('Review.')
+
+    # No OPENCODE_TIMEOUT env → profile 'no_timeout' has no timeout_seconds → 1800 fallback
+    env = {k: v for k, v in os.environ.items() if k != 'OPENCODE_TIMEOUT'}
+    result = run_poller(
+        session_id='sess-default-timeout',
+        task_id='default-timeout-test',
+        port=server.port,
+        cwd=cwd,
+        env=env,
+        timeout=15,
+        config_path=config_path,
+        profile_name='no_timeout',
+    )
+    assert result.returncode == 0
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'default-timeout-test.status').read_text()
+    assert status.strip() == 'COMPLETE'
+
+
+def test_poller_env_override_wins_over_profile_timeout(fake_opencode, tmp_path):
+    """OPENCODE_TIMEOUT env var overrides profile timeout_seconds.
+
+    Profile says 2s, server delays 5s, but env says 10s → succeeds.
+    """
+    server = fake_opencode(session_id='sess-env-override', result_text='## OK', message_delay=3)
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _TIMEOUT_PROFILE_TOML)
+    _hook.write_status(cwd, 'env-override-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'env-override-test.prompt').write_text('Review.')
+
+    # Profile has timeout_seconds=2, but env override says 10 → should succeed
+    result = run_poller(
+        session_id='sess-env-override',
+        task_id='env-override-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        timeout=15,
+        config_path=config_path,
+        profile_name='short_timeout',
+    )
+    assert result.returncode == 0
+    status = (tmp_path / 'project' / '.opencode' / 'tasks' / 'env-override-test.status').read_text()
+    assert status.strip() == 'COMPLETE'
+
+
+def test_startup_timeout_from_toml_defaults(tmp_path, monkeypatch):
+    """Startup timeout reads from config defaults when env var is absent."""
+    toml_content = """\
+version = 1
+
+[defaults]
+startup_timeout_seconds = 42
+
+[profiles.minimal]
+agent = "code-reviewer"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "minimal"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    monkeypatch.setattr(_hook, '_CONFIG_PATH', path)
+
+    # Remove OPENCODE_STARTUP_TIMEOUT so TOML default is used
+    monkeypatch.delenv('OPENCODE_STARTUP_TIMEOUT', raising=False)
+
+    # Capture the startup_timeout passed to ensure_server
+    captured_timeout = []
+    original_ensure = _hook.ensure_server
+
+    def fake_ensure(port, startup_timeout, password=None, cwd=None):
+        captured_timeout.append(startup_timeout)
+        return True, ''  # pretend server is healthy
+
+    monkeypatch.setattr(_hook, 'ensure_server', fake_ensure)
+    monkeypatch.setattr(_hook, 'resolve_port', lambda _cwd: (9999, 'env'))
+    monkeypatch.setattr(_hook, 'create_session', lambda port, pw=None: 'fake-session')
+    monkeypatch.setenv('OPENCODE_PORT', '9999')
+    monkeypatch.setenv('OPENCODE_SKIP_POLLER', '1')
+
+    import io
+    payload = make_payload('superpowers:code-reviewer', cwd=str(tmp_path / 'project'))
+    monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps(payload)))
+
+    # main() will sys.exit(0) after printing deny JSON
+    try:
+        _hook.main()
+    except SystemExit:
+        pass
+
+    assert captured_timeout == [42]
+
+
+def test_startup_timeout_env_overrides_toml(tmp_path, monkeypatch):
+    """OPENCODE_STARTUP_TIMEOUT env var overrides TOML defaults."""
+    toml_content = """\
+version = 1
+
+[defaults]
+startup_timeout_seconds = 42
+
+[profiles.minimal]
+agent = "code-reviewer"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "minimal"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    monkeypatch.setattr(_hook, '_CONFIG_PATH', path)
+
+    # Env var overrides TOML
+    monkeypatch.setenv('OPENCODE_STARTUP_TIMEOUT', '7')
+
+    captured_timeout = []
+
+    def fake_ensure(port, startup_timeout, password=None, cwd=None):
+        captured_timeout.append(startup_timeout)
+        return True, ''
+
+    monkeypatch.setattr(_hook, 'ensure_server', fake_ensure)
+    monkeypatch.setattr(_hook, 'resolve_port', lambda _cwd: (9999, 'env'))
+    monkeypatch.setattr(_hook, 'create_session', lambda port, pw=None: 'fake-session')
+    monkeypatch.setenv('OPENCODE_PORT', '9999')
+    monkeypatch.setenv('OPENCODE_SKIP_POLLER', '1')
+
+    import io
+    payload = make_payload('superpowers:code-reviewer', cwd=str(tmp_path / 'project'))
+    monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps(payload)))
+
+    try:
+        _hook.main()
+    except SystemExit:
+        pass
+
+    assert captured_timeout == [7]
