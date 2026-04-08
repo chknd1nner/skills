@@ -7,23 +7,36 @@ startup_timeout_seconds = 10
 agent = "code-reviewer"
 provider = "poe"
 model = "openai/gpt-5.4"
-timeout_seconds = 1200
+timeout_seconds = 3600
 
-[profiles.implementor_sonnet]
-agent = "implementor"
+[profiles.implementer_sonnet]
+agent = "build"
 provider = "poe"
 model = "anthropic/claude-sonnet-4.6"
 timeout_seconds = 3600
 
 [[routes]]
-name = "superpowers-review"
+name = "superpowers-code-review"
+enabled = true
+match_subagent = "code-reviewer"
+profile = "review_gpt54"
+
+[[routes]]
+name = "superpowers-code-review-prefixed"
 enabled = true
 match_subagent = "superpowers:code-reviewer"
 profile = "review_gpt54"
 
 [[routes]]
-name = "general-review-prefix"
+name = "superpowers-spec-review"
 enabled = true
 match_subagent = "general-purpose"
-match_description_prefix = "review"
+match_description_prefix = "Review spec compliance"
 profile = "review_gpt54"
+
+[[routes]]
+name = "superpowers-implementer"
+enabled = true
+match_subagent = "general-purpose"
+match_description_prefix = "You are implementing"
+profile = "implementer_sonnet"
