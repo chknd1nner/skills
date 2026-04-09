@@ -223,21 +223,32 @@ ensureDefaultConfig() → { created: boolean, path: string }
 
 ### 5.3 `lib/client.mjs` — HTTP client for the Opencode server
 
-Thin wrapper over Node's built-in `fetch`. Three operations.
+Thin wrapper over Node's built-in `fetch`. v1 uses three operations; one additional endpoint is documented as a contract for v2 use.
 
-**Public API:**
+**Public API (v1):**
 ```javascript
 healthCheck(config) → { healthy: boolean, version?: string }
 createSession(config, { directory }) → { id: string }
-sendMessage(config, sessionId, { directory, prompt, agent, model }) → { info, parts }
+sendMessage(config, sessionId, { directory, prompt, agent, model, signal }) → { info, parts }
 ```
+
+**Endpoint contracts:**
+
+| Method | Path | Request | Response | Used in |
+|---|---|---|---|---|
+| GET | `/global/health` | (none) | `{ healthy: boolean, version?: string }` | v1 — `healthCheck` |
+| POST | `/session?directory=<absCwd>` | `{}` | `{ id: "ses_..." }` | v1 — `createSession` |
+| POST | `/session/{id}/message?directory=<absCwd>` | `{ parts, agent, model? }` (see below) | `{ info: { finish, ... }, parts: [...] }` | v1 — `sendMessage` |
+| GET | `/global/event` | (none) | SSE stream | v1 — `events.mjs` (subscribed separately) |
+| POST | `/session/{id}/abort?directory=<absCwd>` | `{}` | (204 / status object) | **v2 only** — reserved for `/opencode:cancel` |
 
 **Implementation notes:**
 - Auth via `Authorization: Bearer ${config.server.password}` when set.
 - Every request carries `?directory=${absoluteCwd}` to scope the session to the user's project (per the Opencode API research doc).
 - `sendMessage` is a blocking POST. Progress comes from `events.mjs` running in parallel. Return value is the final consolidated assistant message — extract `response.parts.filter(p => p.type === 'text').map(p => p.text).join('\n\n')` as the final review text.
-- `model` is passed as an object: `{ providerID, modelID }`. Required shape per Opencode spec — sending it as a string is silently ignored.
-- **Empty response body handling:** Opencode returns HTTP 200 with empty body when the agent name is invalid. Treat empty body as `OpencodeResponseError` with "likely unknown agent" hint.
+- `sendMessage` accepts an `AbortSignal` (`{ signal }`) so a `SIGINT` handler can cancel the in-flight request cleanly. The signal also flows through to the underlying `fetch`.
+- **`model` payload shape:** the Opencode `/session/{id}/message` endpoint expects `model` as an **object**: `{ providerID: string, modelID: string }`. The TOML field names (`provider`, `model`) and the API field names (`providerID`, `modelID`) intentionally differ — the TOML names are friendlier for users, the client maps them at the boundary. Sending the API a flat string is silently ignored (verified in platform research).
+- **Empty response body handling:** Opencode v1.3.x returns HTTP 200 with `Content-Length: 0` when the agent name is invalid. Treat empty body as `OpencodeResponseError` with "likely unknown agent" hint.
 - On `ECONNREFUSED` or DNS failure: throw `OpencodeUnreachableError` with the URL and the `opencode serve` suggestion.
 
 ### 5.4 `lib/events.mjs` — SSE subscriber + event interpreter
@@ -248,9 +259,11 @@ Subscribes to `GET /global/event`, parses the SSE line stream, filters by sessio
 ```javascript
 class EventStream extends EventEmitter {
   constructor(config, sessionId);
-  start();
-  stop();
-  get toolCount();   // public read-only counter, accumulated as 'tool-end' events fire
+  start() → Promise<void>;          // resolves when SSE connection is established
+  stop() → Promise<void>;           // aborts fetch + waits for reader to drain
+  waitForDone({ timeoutMs }) → Promise<void>;  // waits for 'done' event or quiescence window
+  get toolCount();                  // public read-only counter, accumulated as 'tool-end' fires
+  get isDone();                     // true once 'done' has been emitted
   // Events emitted:
   //   'phase'       { label: 'thinking'|'reading'|'running'|'searching'|'writing'|'finalizing' }
   //   'tool-start'  { tool, input, callId }
@@ -262,7 +275,36 @@ class EventStream extends EventEmitter {
 }
 ```
 
-**SSE parsing:** Each event is `data: <JSON>\n\n`. Read lines from `fetch` response body via `response.body.pipeThrough(new TextDecoderStream()).getReader()`, accumulate until blank line, `JSON.parse` the `data:` payload.
+**`start()` is awaited before `sendMessage()` is called.** This is critical: a slow SSE connect must not race past the start of the review and miss early `tool-start` events. `start()` performs the `fetch` to `/global/event`, awaits the response headers (the 200 OK arrival is the "connected" signal), then begins reading the body in a detached background task. The Promise resolves at that point. If the connect fails, `start()` rejects and the whole review fails fast with `OpencodeApiError`.
+
+**`stop()` triggers an `AbortController`** wired into the SSE `fetch` call. The reader sees the abort, exits its loop, releases the underlying socket, and `stop()` resolves. Idempotent — safe to call multiple times.
+
+**`waitForDone({ timeoutMs })`** is the drain mechanism, called by the runner after `sendMessage` resolves. It returns immediately if `isDone` is already true; otherwise it awaits either the `done` event or a timeout (default 2s — long enough for late `session.idle` arrival, short enough not to feel hung). This prevents the `finally` block from cutting off late events that arrive after the POST returns.
+
+**SSE parsing — chunk-to-line buffering:**
+
+Web `ReadableStream` from `fetch` yields arbitrary byte chunks, not lines. The parser maintains a string buffer:
+
+```javascript
+const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+let buffer = "";
+while (!aborted) {
+  const { value, done } = await reader.read();
+  if (done) break;
+  buffer += value;
+  // SSE message terminator is a blank line (\n\n). Accumulate complete messages.
+  let sepIdx;
+  while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
+    const rawMessage = buffer.slice(0, sepIdx);
+    buffer = buffer.slice(sepIdx + 2);
+    parseAndDispatch(rawMessage);   // parse `data: <JSON>` lines, JSON.parse, emit
+  }
+}
+```
+
+`parseAndDispatch` handles a single SSE message — possibly multi-line — extracts the `data:` field(s), concatenates, `JSON.parse`s, filters by `payload.properties.sessionID`, and emits the appropriate semantic event. Malformed messages are silently dropped (logged at debug level if `OPENCODE_PLUGIN_DEBUG=1`).
+
+The buffer is flushed on stream end — any final partial message left in the buffer is parsed before exit.
 
 **Event interpreter is a state machine** translating Opencode events to higher-level semantic events:
 
@@ -311,21 +353,28 @@ class StatusRenderer {
 
 ### 5.6 `lib/transcript.mjs` — log + review file writers
 
-Subscribes to `EventStream` events and writes two files incrementally. Independent of the renderer — both consume the event stream in parallel.
+Subscribes to `EventStream` events and writes the log file incrementally. The review file is written only on successful finish. Independent of the renderer — both consume the event stream in parallel.
 
 **Public API:**
 ```javascript
 class TranscriptWriter {
   constructor({ reviewId, workspaceRoot, config });
   attach(eventStream);
-  start({ metadata });
-  finish({ finalReviewText, status, duration, toolCount });
+  start({ metadata }) → Promise<void>;
+  finish({ finalReviewText, status, duration, toolCount, completedAt }) → Promise<void>;
 }
 ```
 
-**Files written under `<workspaceRoot>/<config.transcript.directory>/<reviewId>.{log.md,review.md}`.**
+**File lifecycle (clarified):**
 
-**At `start()`:** create both files, write YAML frontmatter (same block in both), write `# Opencode Review — ...` header to the log file. Frontmatter must include `status: running` and `started_at` from the very beginning so a crashed/interrupted review still has a meaningful state file.
+| File | When created | When written | When finalized |
+|---|---|---|---|
+| `<id>.log.md` | At `start()` | Continuously as events arrive | At `finish()` — frontmatter rewritten with terminal state, `## Final Review` section appended with the canonical text |
+| `<id>.review.md` | **Only at `finish()` if `status === 'completed'`** | n/a | Written once with the final review text + matching frontmatter |
+
+**Files live under `<workspaceRoot>/<config.transcript.directory>/`.**
+
+**At `start()`:** create only `<id>.log.md`. Write YAML frontmatter (with `status: running`, `started_at`, `tool_calls: 0`) followed by the `# Opencode Review — ...` header. Frontmatter is written immediately so a crashed or `SIGINT`-killed review still has a meaningful state file. The `<id>.review.md` file does NOT exist until the review completes successfully.
 
 **For each event:** append to `{id}.log.md` using `fs.appendFile`:
 
@@ -353,13 +402,109 @@ Markers:
 - `_Writing report…_` when `text-delta` events start.
 - Reasoning text is only expanded when `transcript.include_reasoning = true`. Default is the marker only.
 
-**At `finish()`:** append the `## Final Review` section to `{id}.log.md` (text deltas have already streamed in, so this is just a section header). Write the full final review text verbatim to `{id}.review.md` with matching frontmatter. Update both files' frontmatter to set `completed_at`, `duration`, `status`, and `tool_calls`.
+**At `finish()`:**
 
-**Frontmatter rewrite is atomic:** write the updated header to a `.tmp` file, append the rest of the existing content, `rename` over the original. Both files use this pattern.
+1. **Always backfill the final review text into `<id>.log.md`'s `## Final Review` section** using the canonical `finalReviewText` parameter passed by the runner. The text deltas streamed during the review may be incomplete (SSE drops, late events arriving after `stop()`, the `--json` flag suppressing renderer attachment but not transcript), so the log can never rely on streamed deltas being authoritative. The streamed-text section in the body of the log is a "live preview"; the canonical review text always lands in `## Final Review` at finalization.
+2. **Rewrite the log file's frontmatter atomically** to set `completed_at`, `duration`, `status`, and `tool_calls`.
+3. **If `status === 'completed'`:** create `<id>.review.md` with matching frontmatter and the full final review text verbatim. If `status` is `error` / `interrupted` / `cancelled`, the review file is NOT created — `.log.md` is the only artifact for failed reviews.
+4. **If status is non-completed**, also append a `## Error` section to `<id>.log.md` with the error message and any partial state.
+
+**Frontmatter rewrite is atomic:** write the updated header to a `.tmp` file, append the rest of the existing content, `rename` over the original. The append-only nature of the rest of the log file means all writes outside frontmatter rewrites are pure `fs.appendFile` calls — no read-modify-write races.
+
+**`tool_calls` frontmatter field — when it's actually written.** Frontmatter is rewritten only at `finish()`, not on every tool event. The `tool_calls` count in frontmatter is the **final** count at completion. During an in-flight review, the live count is held in `EventStream.toolCount` (memory only). The renderer reads it from there for the live footer. Anyone tailing `.log.md` mid-review counts `●` markers if they want a live count — frontmatter is not the source of truth until `finish()` runs. This avoids race conditions between append-only event writes and atomic frontmatter rewrites.
 
 ### 5.7 `lib/args.mjs` — CLI argument parser
 
 ~100 LOC utility. Parses argv against a schema (`valueOptions`, `booleanOptions`, `aliasMap`) and returns `{ options, positionals }`. Same shape as Codex's `args.mjs` — the file can be ported essentially unchanged.
+
+### 5.7.1 `prompts/review.md` — the review prompt template
+
+Strategy B (the agent reads files itself) means the prompt has to give the Opencode agent enough deterministic information to scope its review correctly. The plugin doesn't ship the diff text; it ships an instruction set that names exactly what to review and how. The template uses `{{VARIABLE}}` interpolation filled in by `buildReviewPrompt(target, cwd)`.
+
+```markdown
+You are performing a code review on a project at `{{WORKSPACE}}`.
+
+## Review target
+
+**Mode:** {{TARGET_MODE}}
+{{#if TARGET_MODE == "working-tree"}}
+**Scope:** All uncommitted changes — staged, unstaged, and untracked files.
+
+To enumerate the changes, run from `{{WORKSPACE}}`:
+- `git status --short --untracked-files=all`
+- `git diff --cached`  (staged changes)
+- `git diff`           (unstaged changes)
+- For untracked files, read each one directly with your Read tool.
+{{/if}}
+{{#if TARGET_MODE == "branch"}}
+**Scope:** Commits between `{{BASE_REF}}` and `HEAD`.
+
+To enumerate the changes, run from `{{WORKSPACE}}`:
+- `git log --oneline {{BASE_REF}}..HEAD`
+- `git diff {{BASE_REF}}...HEAD --stat`
+- `git diff {{BASE_REF}}...HEAD`  (full diff if you need it; use --name-only first to scope)
+{{/if}}
+
+**Review label:** {{TARGET_LABEL}}
+
+## What to do
+
+1. Use your Bash, Read, and Grep tools to inspect the code under review.
+2. For each issue you find, look at the surrounding code via additional Read calls so your review reflects the broader context, not just the changed lines.
+3. Group findings by severity: **Critical** (bugs, security, data loss), **High** (correctness, performance, design flaws), **Medium** (maintainability, testability), **Low** (style, naming, documentation).
+4. For each finding, cite the file and line number using the form `path/to/file.ts:42`.
+5. Be specific about the *fix*. Don't say "consider X" — say what to change and why.
+
+## Output format
+
+Return your review as Markdown with these sections, in order:
+
+```
+# Code Review
+
+## Summary
+<2-3 sentence high-level assessment>
+
+## Findings
+
+### Critical
+- **`path/to/file.ts:42`** — <one-line title>
+  <Multi-paragraph explanation of the issue and the fix>
+
+### High
+...
+
+### Medium
+...
+
+### Low
+...
+
+## What's good
+<Brief positive observations — what the change does well>
+
+## Recommendation
+<Approve / Approve with changes / Request changes — and why>
+```
+
+## Constraints
+
+- Review only the target scope above. Do not make broader recommendations about the codebase.
+- Do not modify any files. This is a read-only review.
+- If a finding requires running code or tests to verify, note that explicitly rather than guessing.
+- If the target scope is empty (no actual changes), say so and stop — do not invent issues.
+```
+
+**Interpolation variables filled by `buildReviewPrompt`:**
+
+| Variable | Source | Example |
+|---|---|---|
+| `WORKSPACE` | absolute `cwd` | `/Users/foo/projects/auth-service` |
+| `TARGET_MODE` | `target.mode` | `working-tree` or `branch` |
+| `BASE_REF` | `target.baseRef` | `origin/main` (only when mode is `branch`) |
+| `TARGET_LABEL` | `target.label` | `working tree (5 files modified, 2 untracked)` |
+
+The `{{#if ...}}` blocks are simple conditional sections — `buildReviewPrompt` strips one branch based on `target.mode`. No template engine; the interpolation logic is ~30 LOC inside `prompts.mjs` (a small helper module not in the lib list because it's a single function).
 
 ### 5.8 `lib/git.mjs` — review target resolution
 
@@ -449,7 +594,7 @@ Frontmatter fields written by v1:
 
 ```yaml
 ---
-id: 2026-04-09T14-32-15Z
+id: 2026-04-09T14-32-15-487Z-a3f1
 command: /opencode:review --scope working-tree
 agent: code-reviewer
 provider: poe
@@ -461,7 +606,7 @@ status: running          # → "completed" | "error" | "interrupted" on finish
 started_at: 2026-04-09T14:32:15Z
 completed_at: null       # → ISO timestamp on finish
 duration: null           # → "15m 08s" on finish
-tool_calls: 0            # → updated incrementally
+tool_calls: 0            # → final count written at finish() (not updated mid-review)
 ---
 ```
 
@@ -518,6 +663,11 @@ async function handleReview(argv) {
     base: options.base, scope: options.scope,
   });
   const reviewId = makeReviewId();
+  // makeReviewId() format: `2026-04-09T14-32-15-487Z-a3f1` —
+  //   ISO timestamp with millisecond precision PLUS a 4-char random hex suffix.
+  //   The combo guarantees uniqueness even for two simultaneous reviews started
+  //   in the same millisecond. Sorts chronologically in `ls` thanks to the
+  //   leading timestamp.
 
   const result = await executeReviewRun({
     config, reviewId, cwd, target, jsonMode: options.json, command: argv,
@@ -534,7 +684,7 @@ async function handleReview(argv) {
 
 ### Step 3 — `executeReviewRun`: the review core
 
-`executeReviewRun` is a pure function (no `process.exit`, no argv parsing) that takes a fully-resolved context and returns a result object. Future background mode adds a worker subcommand that calls this same function — zero changes to the function itself.
+`executeReviewRun` is the review runner core — no `process.exit`, no argv parsing, no CLI shell logic. It performs network I/O (HTTP + SSE) and filesystem I/O (transcript writes), so it isn't pure in the functional sense, but it's *self-contained*: it takes a fully-resolved context, returns a result object, and throws typed errors. Future background mode adds a worker subcommand that calls this same function — zero changes to its body.
 
 ```javascript
 async function executeReviewRun({ config, reviewId, cwd, target, jsonMode, command }) {
@@ -561,7 +711,8 @@ async function executeReviewRun({ config, reviewId, cwd, target, jsonMode, comma
   transcript.attach(stream);
   renderer?.attach(stream);
 
-  // 3e. Begin — frontmatter written immediately with status: running
+  // 3e. Write transcript frontmatter (status: running) BEFORE any HTTP work
+  // so a Ctrl-C between here and the connect still leaves a meaningful state file.
   const startedAt = new Date();
   await transcript.start({
     metadata: {
@@ -577,12 +728,32 @@ async function executeReviewRun({ config, reviewId, cwd, target, jsonMode, comma
       status: "running",
     },
   });
-  stream.start();
+
+  // 3f. Open the SSE stream BEFORE sending the prompt — and AWAIT it.
+  // This ensures we don't miss early `tool-start` events from a slow SSE connect.
+  await stream.start();
   renderer?.start();
 
-  // 3f. BLOCKING: send the prompt and wait for the final message
+  // 3g. Wire SIGINT to graceful cancellation. The handler aborts both the
+  // SSE stream and the in-flight POST so the `finally` block can finalize
+  // the transcript with status: cancelled. v1 only handles SIGINT once —
+  // a second Ctrl-C terminates the process immediately.
+  const abortController = new AbortController();
+  let cancelledByUser = false;
+  const sigintHandler = () => {
+    if (cancelledByUser) {
+      // Second SIGINT — give up on graceful cleanup and exit hard.
+      process.exit(130);
+    }
+    cancelledByUser = true;
+    process.stderr.write("\nCancelling… (press Ctrl-C again to force-quit)\n");
+    abortController.abort();
+  };
+  process.on("SIGINT", sigintHandler);
+
+  // 3h. BLOCKING: send the prompt and wait for the final message
   let response;
-  let resultStatus = "completed";
+  let runError = null;
   try {
     response = await sendMessage(config, sessionId, {
       directory: cwd,
@@ -591,31 +762,58 @@ async function executeReviewRun({ config, reviewId, cwd, target, jsonMode, comma
       model: config.commands.review.provider && config.commands.review.model
         ? { providerID: config.commands.review.provider, modelID: config.commands.review.model }
         : undefined,
+      signal: abortController.signal,
     });
     if (response.info.finish !== "stop") {
       throw new OpencodeResponseError(
         `Opencode review ended unexpectedly (finish: '${response.info.finish}').`,
-        { suggestion: `Transcript: .opencode/reviews/${reviewId}.log.md` }
+        { suggestion: `Transcript: ${config.transcript.directory}/${reviewId}.log.md` }
       );
     }
   } catch (err) {
-    resultStatus = err instanceof OpencodeUnreachableError ? "error" : "interrupted";
-    throw err;
+    runError = err;
   } finally {
-    renderer?.stop();
-    stream.stop();
+    process.off("SIGINT", sigintHandler);
 
-    // Always finalize the transcript, even on failure (partial-state preservation)
+    // Drain the SSE stream — wait for `done` or a quiescence window so late
+    // events (e.g. final `session.idle`) aren't lost when we stop the stream.
+    try {
+      await stream.waitForDone({ timeoutMs: 2000 });
+    } catch { /* timeout is fine — proceed to stop */ }
+
+    renderer?.stop();
+    await stream.stop();
+
+    // Map error class to terminal status. Order matters — most specific first.
+    const resultStatus = (() => {
+      if (cancelledByUser) return "cancelled";
+      if (!runError) return "completed";
+      if (runError instanceof OpencodeUnreachableError) return "error";
+      if (runError instanceof OpencodeApiError)         return "error";
+      if (runError instanceof OpencodeResponseError)    return "error";
+      // Anything else (network drop mid-stream, unexpected) is "interrupted"
+      return "interrupted";
+    })();
+
+    // Canonical final review text — extracted from the response if we got one,
+    // empty string otherwise. The transcript writer ALWAYS uses this value
+    // (not streamed deltas) as the source of truth for the `## Final Review`
+    // section in the log file.
+    const finalReviewText = response
+      ? response.parts.filter(p => p.type === "text" && p.text).map(p => p.text).join("\n\n")
+      : "";
+
     const completedAt = new Date();
     await transcript.finish({
-      finalReviewText: response
-        ? response.parts.filter(p => p.type === "text" && p.text).map(p => p.text).join("\n\n")
-        : "",
+      finalReviewText,
       status: resultStatus,
       duration: formatDuration(completedAt - startedAt),
       toolCount: stream.toolCount,
       completedAt: completedAt.toISOString(),
+      errorMessage: runError?.message,
     });
+
+    if (runError) throw runError;  // re-throw after transcript is finalized
   }
 
   // 3g. Build and return result object
@@ -640,35 +838,51 @@ async function executeReviewRun({ config, reviewId, cwd, target, jsonMode, comma
 
 ### Step 4 — Concurrency model during the blocking POST
 
-Three things run concurrently between `stream.start()` + `sendMessage(...)` and the response arriving:
+Critical sequencing: SSE connection must be **fully established** before the prompt is sent, so no early `tool-start` events are missed during the SSE handshake. After the prompt is sent, three things run concurrently until the POST returns, then a brief drain phase ensures late events are captured:
 
 ```
-  Main thread                EventStream (SSE)         Renderer tick (250ms)
-  ──────────                 ─────────────────         ─────────────────────
-  POST /session/../message   GET /global/event         setInterval
-  blocked, waiting           reading SSE lines         redraws footer
-        │                            │                          │
-        │                            ▼                          │
-        │                    parses event                       │
-        │                    filter by sessionID                │
-        │                    emit semantic event                │
-        │                            │                          │
-        │                            ├─→ renderer state update  │
-        │                            │                          │
-        │                            ├─→ transcript.append      │
-        │                            │   (writes to .log.md)    │
-        │                            │                          ▼
-        │                            │                  write footer to stderr
-        ▼                            │
-  response arrives                   │
-  (15+ minutes later)                │
-        │                            │
-        ▼                            ▼
-  finally: stream.stop(), renderer.stop(), transcript.finish()
-        │
-        ▼
-  return result; handler writes final review to stdout
+  T=0  await stream.start()
+       │   GET /global/event → 200 OK headers
+       │   reader detached, parsing chunks
+       │
+  T=Δ  Promise resolves; SSE is connected and reading
+       │
+       │ Now safe to send the prompt:
+       ▼
+  T=Δ  sendMessage(...) launched (returns Promise)
+       │
+       │   ┌──────────────────────────┬─────────────────────────┐
+       │   │ Main thread              │ SSE reader (background) │  Renderer tick
+       │   │ POST blocked, waiting    │ pulls + parses chunks   │  setInterval 250ms
+       │   │                          │       │                  │       │
+       │   │                          │       ▼                  │       │
+       │   │                          │ filter by sessionID      │       │
+       │   │                          │ emit semantic event      │       │
+       │   │                          │       │                  │       │
+       │   │                          │       ├─→ renderer state │       │
+       │   │                          │       │                  │       │
+       │   │                          │       └─→ transcript     │       ▼
+       │   │                          │           append .log.md │  write footer
+       │   │                          │                          │  to stderr
+       │   ▼                          │                          │
+       │ response arrives             │                          │
+       │ (15+ minutes later)          │                          │
+       │   │                          │                          │
+       │   ▼                          │                          │
+  T=N  await stream.waitForDone({ timeoutMs: 2000 })
+       │   waits for 'done' event or 2s quiescence so late
+       │   `session.idle` / `tool-end` events aren't lost
+       │   │
+       │   ▼
+  T=N+ε renderer.stop()
+       │ await stream.stop()
+       │ await transcript.finish({ finalReviewText: <from response> })
+       │
+       ▼
+  handler writes final review to stdout
 ```
+
+**Why the drain matters:** Opencode emits `session.idle` (and possibly final `tool-end`s) *after* the blocking POST returns its body. Without `waitForDone`, the `finally` block tears down the SSE stream the instant the POST resolves, dropping those late events. The transcript would undercount tools and the log would stop a fraction of a second too early.
 
 User sees:
 
@@ -684,10 +898,10 @@ User sees:
 ## Findings
 ...
 
-— saved to .opencode/reviews/2026-04-09T14-32-15Z.review.md
+— saved to .opencode/reviews/2026-04-09T14-32-15-487Z-a3f1.review.md
 ```
 
-**`tail -f .opencode/reviews/2026-04-09T14-32-15Z.log.md`** in another terminal during the review shows the chat-transcript log filling up live.
+**`tail -f .opencode/reviews/2026-04-09T14-32-15-487Z-a3f1.log.md`** in another terminal during the review shows the chat-transcript log filling up live.
 
 ### Step 5 — Exit codes
 
@@ -726,23 +940,38 @@ class OpencodeResponseError    extends OpencodePluginError { /* exitCode = 1 */ 
 
 ### Failure mode mapping
 
-| Stage | Failure | Class | User sees |
-|---|---|---|---|
-| args.mjs | Unknown flag | `CliArgumentError` | Suggested correction; exit 2 |
-| args.mjs | Invalid value | `CliArgumentError` | Expected values listed; exit 2 |
-| config.mjs | TOML parse failure | `ConfigError` | File path + line number; exit 2 |
-| config.mjs | Schema validation | `ConfigError` | Field path + what was expected; exit 2 |
-| config.mjs | Paired-field violation | `ConfigError` | Both-or-neither rule explained; exit 2 |
-| git.mjs | Not a git repo | `GitError` | "Run from inside a git repo"; exit 1 |
-| git.mjs | Nothing to review | `GitError` | "Working tree clean and HEAD matches upstream"; exit 1 |
-| git.mjs | Unknown ref | `GitError` | "git fetch" hint; exit 1 |
-| client.mjs | ECONNREFUSED | `OpencodeUnreachableError` | Exact `opencode serve` command; exit 1 |
-| client.mjs | 401 Unauthorized | `OpencodeApiError` | "Set [server].password in config.toml"; exit 1 |
-| client.mjs | 5xx on session create | `OpencodeApiError` | "Check opencode serve logs"; exit 1 |
-| client.mjs | Network drop mid-POST | `OpencodeApiError` | "Partial transcript saved to ..."; exit 1 |
-| client.mjs | Empty response body | `OpencodeResponseError` | "Likely unknown agent name"; exit 1 |
-| client.mjs | `finish !== "stop"` | `OpencodeResponseError` | Transcript path included; exit 1 |
-| handleReview | Empty `finalReviewText` | (warning, not error) | Stderr warning, exit 0, transcript saved |
+| Stage | Failure | Class | Terminal status | User sees |
+|---|---|---|---|---|
+| args.mjs | Unknown flag | `CliArgumentError` | n/a (pre-transcript) | Suggested correction; exit 2 |
+| args.mjs | Invalid value | `CliArgumentError` | n/a | Expected values listed; exit 2 |
+| config.mjs | TOML parse failure | `ConfigError` | n/a | File path + line number; exit 2 |
+| config.mjs | Schema validation | `ConfigError` | n/a | Field path + what was expected; exit 2 |
+| config.mjs | Paired-field violation | `ConfigError` | n/a | Both-or-neither rule explained; exit 2 |
+| git.mjs | Not a git repo | `GitError` | n/a | "Run from inside a git repo"; exit 1 |
+| git.mjs | Nothing to review | `GitError` | n/a | "Working tree clean and HEAD matches upstream"; exit 1 |
+| git.mjs | Unknown ref | `GitError` | n/a | "git fetch" hint; exit 1 |
+| client.mjs | Health check failure (pre-session) | `OpencodeUnreachableError` | n/a (no transcript) | Exact `opencode serve` command; exit 1 |
+| client.mjs | 401 Unauthorized | `OpencodeApiError` | `error` | "Set [server].password in config.toml"; exit 1 |
+| client.mjs | 5xx on session create | `OpencodeApiError` | `error` | "Check opencode serve logs"; exit 1 |
+| client.mjs | Network drop mid-POST | `OpencodeApiError` | `error` | "Partial transcript saved to ..."; exit 1 |
+| client.mjs | Empty response body | `OpencodeResponseError` | `error` | "Likely unknown agent name"; exit 1 |
+| client.mjs | `finish !== "stop"` | `OpencodeResponseError` | `error` | Transcript path included; exit 1 |
+| client.mjs | Anything else thrown mid-stream | (uncaught propagated) | `interrupted` | Generic message; partial transcript; exit 1 |
+| executeReviewRun | User pressed Ctrl-C | (AbortError from signal) | `cancelled` | "Cancelled by user"; partial transcript; exit 130 |
+| handleReview | Empty `finalReviewText` | (warning, not error) | `completed` | Stderr warning, exit 0, transcript saved |
+
+**Class → terminal status mapping** (used in `executeReviewRun`'s `finally` block):
+
+```
+cancelledByUser ............ → "cancelled"   (always wins)
+runError == null ........... → "completed"
+OpencodeUnreachableError ... → "error"       (rare here — usually pre-transcript)
+OpencodeApiError ........... → "error"
+OpencodeResponseError ...... → "error"
+anything else .............. → "interrupted"
+```
+
+The `error` vs `interrupted` distinction matters for future `/opencode:status`: `error` means "the review failed for an identifiable reason"; `interrupted` means "the review's state is unknown — partial output may or may not be salvageable."
 
 ### Exemplary error: server unreachable
 
@@ -774,12 +1003,22 @@ When a review fails mid-flight (network drop, malformed response), the transcrip
 
 A user whose 12-minute review crashes at minute 11 still has 11 minutes of activity log to understand what the agent was doing.
 
+### SIGINT handling (v1)
+
+15-30 minute reviews make Ctrl-C likely. v1 ships with a minimal `SIGINT` handler that does the right thing without bloating scope:
+
+1. **First Ctrl-C:** abort the in-flight `sendMessage` POST via `AbortController`, print "Cancelling…" to stderr, let the `finally` block in `executeReviewRun` run. The transcript is finalized with `status: cancelled`, `completedAt`, and `tool_calls = <whatever was captured>`. Exit 130 (standard for "terminated by SIGINT").
+2. **Second Ctrl-C (within the cleanup window):** `process.exit(130)` immediately. The transcript may end up with stale frontmatter (`status: running`), accepted as the price of impatience. The user knows what they did.
+
+This is one signal handler, ~15 LOC, integrated into `executeReviewRun` (see step 3g of §7). It eliminates the most common stranded-state scenario without expanding the v1 surface area.
+
 ### Deliberately not handled in v1
 
 - **Automatic retries.** No retry on network drop. The error tells the user to re-run; they decide. Auto-retry is a foot-gun for 15-30 minute reviews (silently doubling cost on a flaky network).
 - **Backoff for transient 5xx.** Same reason. Surfacing failure quickly is better than hiding it.
-- **`SIGINT` cleanup.** v1 has no `process.on('SIGINT')` handler. Ctrl-C kills the process and the `finally` block may or may not run. The transcript will have `status: running` and stale data. v2's stale-job recovery via `pid` field handles this.
-- **Server-side errors during the review.** `events.mjs` propagates `session.error` as an error event, which terminates the stream cleanly. The blocking POST eventually returns with `finish !== "stop"`, handled in 3f above.
+- **`SIGTERM` and other signals.** Only `SIGINT` is handled. `SIGTERM` (e.g. from a parent killing the process) lets the OS terminate immediately. Acceptable for a foreground command — `SIGTERM` is rare in interactive use.
+- **Stale-state recovery.** If a `SIGINT` cleanup fails or the process is killed via `SIGKILL`, the transcript is left at `status: running`. v2's `/opencode:status` will add a stale-detection pass (look for `status: running` log files where `started_at` is older than N hours and no PID is alive).
+- **Server-side errors during the review.** `events.mjs` propagates `session.error` as an error event, which terminates the stream cleanly. The blocking POST eventually returns with `finish !== "stop"`, handled in 3h above.
 
 ---
 
@@ -871,7 +1110,7 @@ Zero changes to `executeReviewRun`.
 **To add:**
 - `handleStatus(argv)` — globs `.opencode/reviews/*.log.md`, parses frontmatter, prints a sorted table. ~60 LOC.
 - `handleResult(argv)` — reads `.opencode/reviews/{id}.review.md`, prints to stdout. ~20 LOC.
-- `handleCancel(argv)` — reads `pid` and `session_id` from frontmatter, calls `POST /session/{id}/abort`, sends SIGTERM, updates frontmatter to `status: cancelled`. ~50 LOC.
+- `handleCancel(argv)` — reads `pid` and `session_id` from frontmatter, calls the `POST /session/{id}/abort` endpoint documented in §5.3's endpoint contracts table (reserved for v2 use), sends SIGTERM to the worker PID, updates frontmatter to `status: cancelled`. ~50 LOC.
 - Three new SKILL.md files. ~20 LOC each.
 
 ### `/opencode:task` (generic prompt dispatch)
@@ -953,7 +1192,8 @@ These are deliberately deferred to implementation time, not blockers for the spe
 1. **`argument-hint` and `allowed-tools` frontmatter on SKILL.md** — verify these fields work the same way they do on legacy command markdown. The Codex plugin uses both. If renamed/scoped differently for skills, adapt.
 2. **Spinner frame rate vs renderer tick** — 100ms spinner inside a 250ms tick is fine in principle, but verify the visual feel. If the spinner stutters, drop to 250ms throughout.
 3. **`smol-toml` vs alternatives** — `@iarna/toml` is the most popular but unmaintained. `smol-toml` is the maintained replacement. If `smol-toml` has any blocker we discover during implementation, fall back to writing a minimal TOML reader (the v1 schema is simple enough to parse by hand if needed).
-4. **`fetch` streaming on Node 20** — Node's built-in `fetch` returns a web ReadableStream. Verify the SSE parsing approach in §5.4 works on Node 20 specifically; if not, fall back to `https.request` with manual stream reading.
+4. **`fetch` + AbortController on Node 20** — Node's built-in `fetch` supports `signal: AbortController.signal`. Verify the abort actually closes the underlying TCP socket (not just rejects the Promise) on Node 20 specifically — if not, fall back to `https.request` with manual stream reading and `req.destroy()` on abort.
+5. **Opencode `session.idle` timing** — the §7 drain mechanism (`waitForDone({ timeoutMs: 2000 })`) assumes `session.idle` arrives within ~2s of the blocking POST returning. If real-world testing shows it sometimes arrives later (or sometimes never), adjust the timeout or change the drain to "stop after N seconds with no events" instead of "wait for done."
 
 None of these block writing the implementation plan.
 
