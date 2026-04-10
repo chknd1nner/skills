@@ -44,7 +44,7 @@ export function parseArgs(argv, schema = {}) {
         }
         options[name] = argv[++i];
       } else {
-        positionals.push(arg);
+        throw new CliArgumentError(`Unknown option '--${name}'.`);
       }
       continue;
     }
@@ -63,7 +63,7 @@ export function parseArgs(argv, schema = {}) {
         }
         options[resolved] = argv[++i];
       } else {
-        positionals.push(arg);
+        throw new CliArgumentError(`Unknown option '${arg}'.`);
       }
       continue;
     }

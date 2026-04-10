@@ -137,8 +137,14 @@ export class TranscriptWriter {
         agent: this.#metadata.agent,
         provider: this.#metadata.provider ?? null,
         model: this.#metadata.model ?? null,
+        session_id: this.#metadata.sessionId,
+        workspace: this.#metadata.workspace,
+        target: this.#metadata.target,
         status: "completed",
+        started_at: this.#metadata.startedAt,
+        completed_at: completedAt,
         duration,
+        tool_calls: toolCount,
       });
       fs.writeFileSync(
         this.#reviewFilePath,

@@ -43,7 +43,7 @@ export function interpretEvent(
   if (!payload) return;
 
   const props = payload.properties ?? {};
-  if (props.sessionID && props.sessionID !== sessionId) return;
+  if (!props.sessionID || props.sessionID !== sessionId) return;
 
   const type = payload.type;
 
@@ -53,7 +53,7 @@ export function interpretEvent(
   }
 
   if (type === "session.error") {
-    emit("error", { error: props.error ?? "Unknown server error" });
+    emit("stream-error", { error: props.error ?? "Unknown server error" });
     return;
   }
 
@@ -196,7 +196,7 @@ export class EventStream extends EventEmitter {
       }
     } catch (err) {
       if (err.name !== "AbortError") {
-        this.emit("error", { error: err.message });
+        this.emit("stream-error", { error: err.message });
       }
     } finally {
       // Flush remaining buffer

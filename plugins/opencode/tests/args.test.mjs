@@ -60,4 +60,18 @@ describe("parseArgs", () => {
       /requires a value/
     );
   });
+
+  it("rejects unknown long options", () => {
+    assert.throws(
+      () => parseArgs(["--unknown"], { booleanOptions: ["json"] }),
+      /Unknown option/
+    );
+  });
+
+  it("rejects unknown short options", () => {
+    assert.throws(
+      () => parseArgs(["-x"], { booleanOptions: ["json"] }),
+      /Unknown option/
+    );
+  });
 });

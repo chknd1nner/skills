@@ -1,9 +1,9 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { GitError } from "./errors.mjs";
 
-function gitExec(cwd, cmd) {
+function gitExec(cwd, args) {
   try {
-    return execSync(`git ${cmd}`, {
+    return execFileSync("git", args, {
       cwd,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
@@ -13,8 +13,8 @@ function gitExec(cwd, cmd) {
   }
 }
 
-function gitExecOrThrow(cwd, cmd, errorMessage) {
-  const result = gitExec(cwd, cmd);
+function gitExecOrThrow(cwd, args, errorMessage) {
+  const result = gitExec(cwd, args);
   if (result === null) {
     throw new GitError(errorMessage);
   }
@@ -22,16 +22,16 @@ function gitExecOrThrow(cwd, cmd, errorMessage) {
 }
 
 function isGitRepo(cwd) {
-  return gitExec(cwd, "rev-parse --is-inside-work-tree") === "true";
+  return gitExec(cwd, ["rev-parse", "--is-inside-work-tree"]) === "true";
 }
 
 function isWorkingTreeDirty(cwd) {
-  const status = gitExec(cwd, "status --porcelain --untracked-files=all");
+  const status = gitExec(cwd, ["status", "--porcelain", "--untracked-files=all"]);
   return status != null && status.length > 0;
 }
 
 function countStatusItems(cwd) {
-  const status = gitExec(cwd, "status --porcelain --untracked-files=all") ?? "";
+  const status = gitExec(cwd, ["status", "--porcelain", "--untracked-files=all"]) ?? "";
   if (!status) return { modified: 0, untracked: 0 };
   const lines = status.split("\n").filter(Boolean);
   let modified = 0;
@@ -47,15 +47,15 @@ function countStatusItems(cwd) {
 }
 
 function getUpstream(cwd) {
-  return gitExec(cwd, "rev-parse --abbrev-ref HEAD@{upstream}");
+  return gitExec(cwd, ["rev-parse", "--abbrev-ref", "HEAD@{upstream}"]);
 }
 
 function refExists(cwd, ref) {
-  return gitExec(cwd, `rev-parse --verify ${ref}`) !== null;
+  return gitExec(cwd, ["rev-parse", "--verify", ref]) !== null;
 }
 
 function countCommits(cwd, baseRef) {
-  const result = gitExec(cwd, `rev-list --count ${baseRef}..HEAD`);
+  const result = gitExec(cwd, ["rev-list", "--count", `${baseRef}..HEAD`]);
   return result ? parseInt(result, 10) : 0;
 }
 

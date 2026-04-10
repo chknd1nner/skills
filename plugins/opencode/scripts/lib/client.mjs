@@ -76,7 +76,15 @@ export async function createSession(config, { directory }) {
     );
   }
 
-  return await res.json();
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new OpencodeResponseError(
+      `Opencode returned invalid JSON for session creation: ${text.slice(0, 200)}`,
+      { suggestion: "Check 'opencode serve' logs." }
+    );
+  }
 }
 
 /**
