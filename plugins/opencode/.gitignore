@@ -1,0 +1,3 @@
+# Opencode plugin runtime artifacts
+.opencode/
+node_modules/
