@@ -333,7 +333,7 @@ async function handleReview(argv) {
     const slashIdx = options.model.indexOf("/");
     if (slashIdx > 0) {
       modelOverrides.provider = options.model.slice(0, slashIdx);
-      modelOverrides.model = options.model;
+      modelOverrides.model = options.model.slice(slashIdx + 1);
     } else {
       modelOverrides.model = options.model;
     }
