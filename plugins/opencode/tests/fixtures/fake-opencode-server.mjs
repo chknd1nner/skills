@@ -111,6 +111,10 @@ export async function startFakeServer(opts = {}) {
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
       }
 
+      // Write a keepalive comment so the SSE fetch() call returns headers
+      // immediately even when no events are queued yet.
+      res.write(":keepalive\n\n");
+
       // Keep the connection open until client disconnects
       req.on("close", () => {
         res.end();
