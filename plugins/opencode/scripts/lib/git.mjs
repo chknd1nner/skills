@@ -83,6 +83,12 @@ export function resolveReviewTarget(cwd, { base, scope } = {}) {
   }
 
   const effectiveScope = scope ?? "auto";
+  const validScopes = ["auto", "working-tree", "branch"];
+  if (!validScopes.includes(effectiveScope)) {
+    throw new GitError(
+      `Invalid --scope '${effectiveScope}'. Must be one of: ${validScopes.join(", ")}.`
+    );
+  }
 
   // --base implies branch mode when scope is auto
   if (base && effectiveScope === "auto") {

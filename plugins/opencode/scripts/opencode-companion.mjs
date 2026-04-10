@@ -189,6 +189,11 @@ async function executeReviewRun({
   transcript.attach(stream);
   renderer?.attach(stream);
 
+  // Listen for SSE-level errors (server-side failures, stream drops)
+  stream.on("stream-error", ({ error }) => {
+    process.stderr.write(`\nOpencode stream error: ${error}\n`);
+  });
+
   // Write transcript header immediately (status: running)
   const startedAt = new Date();
   await transcript.start({
@@ -322,11 +327,26 @@ async function handleReview(argv) {
     aliasMap: { m: "model" },
   });
 
+  // Parse --model spec as "provider/model" if it contains a slash
+  const modelOverrides = {};
+  if (options.model) {
+    const slashIdx = options.model.indexOf("/");
+    if (slashIdx > 0) {
+      modelOverrides.provider = options.model.slice(0, slashIdx);
+      modelOverrides.model = options.model;
+    } else {
+      modelOverrides.model = options.model;
+    }
+  }
+
+  // Ensure config file exists on first run
+  ensureDefaultConfig();
+
   const config = loadConfig({
     overrides: {
       commands: {
         review: {
-          ...(options.model && { model: options.model }),
+          ...modelOverrides,
           ...(options.agent && { agent: options.agent }),
         },
       },
@@ -351,6 +371,11 @@ async function handleReview(argv) {
 
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else if (!result.finalReviewText) {
+    process.stderr.write(
+      `Warning: Opencode completed but returned no review text.\n` +
+        `Log: ${result.logPath}\n`
+    );
   } else {
     process.stdout.write(result.finalReviewText);
     process.stdout.write(`\n\n\u2014 saved to ${result.reviewPath}\n`);
@@ -380,7 +405,10 @@ async function main() {
 }
 
 main().catch((err) => {
-  if (err instanceof OpencodePluginError) {
+  if (err.name === "AbortError") {
+    // User cancelled via Ctrl-C — clean exit
+    process.exitCode = 130;
+  } else if (err instanceof OpencodePluginError) {
     process.stderr.write(`Error: ${err.message}\n`);
     if (err.suggestion) {
       process.stderr.write(`\n${err.suggestion}\n`);

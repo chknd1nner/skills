@@ -19,7 +19,7 @@ Core constraint:
 Execution:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/opencode-companion.mjs" review "$ARGUMENTS"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/opencode-companion.mjs" review $ARGUMENTS
 ```
 
 Return the command's stdout verbatim. Do not paraphrase or summarise.
