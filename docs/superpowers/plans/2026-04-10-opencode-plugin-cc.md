@@ -977,6 +977,11 @@ export function resolveReviewTarget(cwd, { base, scope } = {}) {
   }
 
   if (effectiveScope === "working-tree") {
+    if (base) {
+      process.stderr.write(
+        `Warning: --base is ignored when --scope is working-tree.\n`
+      );
+    }
     return resolveWorkingTreeTarget(cwd);
   }
 
@@ -3112,6 +3117,7 @@ async function executeReviewRun({
   // Blocking POST
   let response = null;
   let runError = null;
+  let finalReviewText = "";
   try {
     response = await sendMessage(config, sessionId, {
       directory: cwd,
@@ -3159,7 +3165,7 @@ async function executeReviewRun({
       return "interrupted";
     })();
 
-    const finalReviewText = response
+    finalReviewText = response
       ? response.parts
           .filter((p) => p.type === "text" && p.text)
           .map((p) => p.text)
@@ -3177,25 +3183,21 @@ async function executeReviewRun({
     });
 
     if (runError) throw runError;
+
+    // Build result (only reachable when runError is null → response is defined)
+    // Reuses finalReviewText already computed above in the finally block.
+    return {
+      reviewId,
+      sessionId,
+      target,
+      finalReviewText,
+      logPath: `${config.transcript.directory}/${reviewId}.log.md`,
+      reviewPath: `${config.transcript.directory}/${reviewId}.review.md`,
+      status: "completed",
+      durationMs: completedAt - startedAt,
+      toolCount: stream.toolCount,
+    };
   }
-
-  // Build result
-  const finalReviewText = response.parts
-    .filter((p) => p.type === "text" && p.text)
-    .map((p) => p.text)
-    .join("\n\n");
-
-  return {
-    reviewId,
-    sessionId,
-    target,
-    finalReviewText,
-    logPath: `${config.transcript.directory}/${reviewId}.log.md`,
-    reviewPath: `${config.transcript.directory}/${reviewId}.review.md`,
-    status: "completed",
-    durationMs: new Date() - startedAt,
-    toolCount: stream.toolCount,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -3388,8 +3390,11 @@ import os from "node:os";
 import { execSync, execFileSync } from "node:child_process";
 import { startFakeServer } from "../fixtures/fake-opencode-server.mjs";
 
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPANION = path.resolve(
-  import.meta.dirname,
+  __dirname,
   "../../scripts/opencode-companion.mjs"
 );
 
