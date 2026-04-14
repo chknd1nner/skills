@@ -1,5 +1,6 @@
 """Prompt builder — assembles module fragments into a temp file for --append-system-prompt-file."""
 
+import json
 import os
 import tempfile
 from typing import Optional
@@ -48,5 +49,21 @@ def assemble_prompt(
     with os.fdopen(fd, "w") as f:
         f.write("\n\n".join(parts))
         f.write("\n")
+
+    return path
+
+
+def write_mcp_config(config: dict) -> str:
+    """Write MCP config to temp file, return path.
+
+    Args:
+        config: dict with mcpServers key
+
+    Returns:
+        Path to temp JSON file
+    """
+    fd, path = tempfile.mkstemp(suffix=".json", prefix="claude-mcp-")
+    with os.fdopen(fd, "w") as f:
+        json.dump(config, f, indent=2)
 
     return path
