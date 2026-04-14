@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from launcher.config import parse_env, load_state, save_state
-from launcher.prompt_builder import assemble_prompt
+from launcher.prompt_builder import assemble_prompt, write_mcp_config
 
 MODULES_DIR = Path(__file__).parent / "modules"
 STATE_FILENAME = ".claude-launcher-state.json"
@@ -280,19 +280,35 @@ def main():
             except Exception as e:
                 print(f"Warning: {mod_info['name']} failed to build prompt: {e}")
 
-    # Step 6: Parse user flags
+    # Step 6: Collect MCP entries from enabled modules
+    mcp_servers = collect_mcp_entries(modules, module_states, env)
+
+    # Step 7: Parse user flags
     args = parse_args(sys.argv[1:])
 
-    # Step 7: Assemble system prompt
+    # Step 8: Assemble system prompt
     prompt_path = assemble_prompt(fragments, args["user_appends"])
 
-    # Step 8: Launch claude
+    # Step 9: Write MCP config if any modules contributed servers
+    mcp_path = None
+    if mcp_servers:
+        mcp_path = write_mcp_config({"mcpServers": mcp_servers})
+
+    # Step 10: Launch claude
     claude_args = ["claude"]
     if prompt_path:
         claude_args.extend(["--append-system-prompt-file", prompt_path])
+    if mcp_path:
+        claude_args.extend(["--mcp-config", mcp_path])
     claude_args.extend(args["passthrough"])
 
-    print(f"Launching claude with {len(fragments)} module(s)...")
+    mcp_count = len(mcp_servers)
+    if mcp_count:
+        print(
+            f"Launching claude with {len(fragments)} module(s), {mcp_count} MCP server(s)..."
+        )
+    else:
+        print(f"Launching claude with {len(fragments)} module(s)...")
     os.execvp("claude", claude_args)
 
 
