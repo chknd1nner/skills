@@ -4,7 +4,7 @@ version = 1
 startup_timeout_seconds = 10
 
 [profiles.review_gpt54]
-agent = "code-reviewer"
+agent = "plan"
 provider = "poe"
 model = "openai/gpt-5.4"
 timeout_seconds = 3600
@@ -38,5 +38,5 @@ profile = "review_gpt54"
 name = "superpowers-implementer"
 enabled = true
 match_subagent = "general-purpose"
-match_description_prefix = "You are implementing"
+match_description_prefix = "Implement task"
 profile = "implementer_sonnet"

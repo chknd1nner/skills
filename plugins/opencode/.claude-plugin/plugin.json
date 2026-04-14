@@ -1,0 +1,9 @@
+{
+  "name": "opencode",
+  "version": "0.1.0",
+  "description": "Dispatch code reviews and tasks to a running Opencode server.",
+  "author": {
+    "name": "Martin Kuek"
+  },
+  "license": "MIT"
+}
