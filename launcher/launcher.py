@@ -92,10 +92,12 @@ def discover_modules(env: dict) -> list:
 
             result = mod.check_dependencies(env)
             if result.get("available"):
-                available.append({
-                    "name": result["name"],
-                    "module": mod,
-                })
+                available.append(
+                    {
+                        "name": result["name"],
+                        "module": mod,
+                    }
+                )
         except Exception:
             continue
 
@@ -201,6 +203,33 @@ def selections_to_module_state(selections: dict, all_items: list) -> dict:
             module_states[mod_key][key] = selected
 
     return module_states
+
+
+def collect_mcp_entries(modules: list, module_states: dict, env: dict) -> dict:
+    """Collect MCP server entries from all enabled modules.
+
+    Returns dict in mcpServers format: {"server-name": {config...}, ...}
+    """
+    mcp_servers = {}
+    for mod_info in modules:
+        mod = mod_info["module"]
+        mod_key = mod_info["name"].lower().replace(" ", "_")
+        mod_state = module_states.get(mod_key, {})
+
+        if not mod_state.get("enabled", False):
+            continue
+
+        if hasattr(mod, "build_mcp_entries"):
+            try:
+                entries = mod.build_mcp_entries(env, mod_state)
+                for entry in entries:
+                    entry = entry.copy()  # Don't mutate original
+                    name = entry.pop("name")
+                    mcp_servers[name] = entry
+            except Exception as e:
+                print(f"Warning: {mod_info['name']} failed to build MCP entries: {e}")
+
+    return mcp_servers
 
 
 def main():
