@@ -24,3 +24,16 @@ def check_dependencies(env: dict) -> dict:
         "name": "Codebase-Memory MCP",
         "reason": None,
     }
+
+
+def build_tui_section(env: dict, saved_state: dict) -> list:
+    """Return TUI items — single enable toggle."""
+    return [
+        {
+            "type": "toggle",
+            "label": "Codebase-Memory MCP",
+            "key": "enabled",
+            "default": saved_state.get("enabled", True),
+            "group": "master",
+        }
+    ]

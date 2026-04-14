@@ -21,3 +21,23 @@ def test_check_dependencies_binary_not_found():
     assert result["available"] is False
     assert result["name"] == "Codebase-Memory MCP"
     assert "not found on PATH" in result["reason"]
+
+
+def test_build_tui_section_returns_toggle():
+    result = module.build_tui_section({}, {})
+
+    assert len(result) == 1
+    assert result[0]["type"] == "toggle"
+    assert result[0]["label"] == "Codebase-Memory MCP"
+    assert result[0]["key"] == "enabled"
+    assert result[0]["group"] == "master"
+
+
+def test_build_tui_section_respects_saved_state():
+    result = module.build_tui_section({}, {"enabled": False})
+    assert result[0]["default"] is False
+
+
+def test_build_tui_section_defaults_to_enabled():
+    result = module.build_tui_section({}, {})
+    assert result[0]["default"] is True
