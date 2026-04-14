@@ -79,6 +79,8 @@ class FakeOpenCodeHandler(http.server.BaseHTTPRequestHandler):
 
     def _record_request(self, method: str, body: bytes = b''):
         """Record request details for later assertion."""
+        from urllib.parse import urlparse, parse_qs
+        parsed_url = urlparse(self.path)
         parsed_body = None
         if body:
             try:
@@ -87,7 +89,9 @@ class FakeOpenCodeHandler(http.server.BaseHTTPRequestHandler):
                 parsed_body = body.decode(errors='replace')
         self.server.requests.append({
             'method': method,
-            'path': self.path,
+            'path': parsed_url.path,  # path without query string
+            'query': parse_qs(parsed_url.query),  # parsed query params
+            'full_path': self.path,  # original path with query string
             'headers': dict(self.headers),
             'body': parsed_body,
         })
@@ -127,7 +131,12 @@ class FakeOpenCodeHandler(http.server.BaseHTTPRequestHandler):
         body = self.rfile.read(content_length)
         self._record_request('POST', body)
 
-        if self.path == '/session':
+        # Parse path without query string for matching
+        from urllib.parse import urlparse
+        parsed = urlparse(self.path)
+        path_only = parsed.path
+
+        if path_only == '/session':
             session_id = self.server.config.get('session_id', 'fake-session-123')
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -135,7 +144,7 @@ class FakeOpenCodeHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'id': session_id}).encode())
             return
 
-        if '/message' in self.path and self.path.endswith('/message'):
+        if '/message' in path_only and path_only.endswith('/message'):
             # Blocking prompt endpoint — sleep to simulate review time, then return
             delay = self.server.config.get('message_delay', 0)
             if delay > 0:
@@ -322,11 +331,12 @@ def test_general_purpose_review_description_detected(fake_opencode, tmp_path):
 
 
 def test_review_description_case_insensitive(fake_opencode, tmp_path):
-    """Detection is case-insensitive on 'review' prefix."""
+    """Detection is case-insensitive on description prefix matching."""
     server = fake_opencode(session_id='sess-detect-case')
     cwd = str(tmp_path / 'project')
     result = run_hook(
-        make_payload('general-purpose', 'REVIEW the implementation', cwd=cwd),
+        # Uses uppercase of a prefix that matches the config's "Review spec compliance" route
+        make_payload('general-purpose', 'REVIEW SPEC COMPLIANCE for task 42', cwd=cwd),
         env={
             'OPENCODE_PORT': str(server.port),
             'OPENCODE_STARTUP_TIMEOUT': '2',
@@ -2107,7 +2117,7 @@ profile = "minimal"
 
     monkeypatch.setattr(_hook, 'ensure_server', fake_ensure)
     monkeypatch.setattr(_hook, 'resolve_port', lambda _cwd: (9999, 'env'))
-    monkeypatch.setattr(_hook, 'create_session', lambda port, pw=None: 'fake-session')
+    monkeypatch.setattr(_hook, 'create_session', lambda port, pw=None, directory=None: 'fake-session')
     monkeypatch.setenv('OPENCODE_PORT', '9999')
     monkeypatch.setenv('OPENCODE_SKIP_POLLER', '1')
 
@@ -2154,7 +2164,7 @@ profile = "minimal"
 
     monkeypatch.setattr(_hook, 'ensure_server', fake_ensure)
     monkeypatch.setattr(_hook, 'resolve_port', lambda _cwd: (9999, 'env'))
-    monkeypatch.setattr(_hook, 'create_session', lambda port, pw=None: 'fake-session')
+    monkeypatch.setattr(_hook, 'create_session', lambda port, pw=None, directory=None: 'fake-session')
     monkeypatch.setenv('OPENCODE_PORT', '9999')
     monkeypatch.setenv('OPENCODE_SKIP_POLLER', '1')
 

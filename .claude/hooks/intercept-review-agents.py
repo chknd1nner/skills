@@ -463,9 +463,17 @@ def resolve_port(cwd: str) -> tuple[int, str]:
 # ---------------------------------------------------------------------------
 # HTTP dispatch
 # ---------------------------------------------------------------------------
-def create_session(port: int, password: str | None = None) -> str | None:
+def _url_with_directory(base_url: str, directory: str | None) -> str:
+    """Append ?directory= query param to URL if directory is provided."""
+    if directory:
+        from urllib.parse import urlencode
+        return f'{base_url}?{urlencode({"directory": directory})}'
+    return base_url
+
+
+def create_session(port: int, password: str | None = None, directory: str | None = None) -> str | None:
     """POST /session → session_id, or None on failure."""
-    url = f'http://127.0.0.1:{port}/session'
+    url = _url_with_directory(f'http://127.0.0.1:{port}/session', directory)
     data = json.dumps({}).encode()
     req = Request(url, data=data, headers={'Content-Type': 'application/json'})
     if password:
@@ -560,7 +568,7 @@ def run_background_process(
     sse.start()
 
     # Send blocking POST — body uses agent + optional model object from profile
-    url = f'http://127.0.0.1:{port}/session/{session_id}/message'
+    url = _url_with_directory(f'http://127.0.0.1:{port}/session/{session_id}/message', cwd)
     body: dict = {
         'agent': profile.get('agent', ''),
         'parts': [{'type': 'text', 'text': prompt}],
@@ -634,12 +642,34 @@ def run_background_process(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+def _resolve_git_root(cwd: str) -> str:
+    """Resolve to git repository root to avoid cwd drift from cd commands.
+    Falls back to original cwd if not in a git repo or on error."""
+    if not cwd:
+        return cwd
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', '--show-toplevel'],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return cwd
+
+
 def main() -> None:
     payload = json.loads(sys.stdin.read())
     tool_input = payload.get('tool_input', {})
-    subagent_type = tool_input.get('subagent_type', '')
+    # Treat empty/missing subagent_type as 'general-purpose' (Claude Code's internal default)
+    subagent_type = tool_input.get('subagent_type', '') or 'general-purpose'
     description = tool_input.get('description', '')
-    cwd = payload.get('cwd', '')
+    # Resolve to git root to avoid cwd drift from Bash cd commands
+    cwd = _resolve_git_root(payload.get('cwd', ''))
     prompt = tool_input.get('prompt', '')
 
     # Bypass check — first thing, before all other logic
@@ -689,15 +719,10 @@ def main() -> None:
     # Generate task ID and create session
     task_id = uuid.uuid4().hex[:12]
 
-    session_id = create_session(port, password)
+    session_id = create_session(port, password, directory=cwd)
     if not session_id:
         log('failed to create session | falling back to Claude agent')
         sys.exit(0)
-
-    # Prepend working directory context so the model knows where the repo is,
-    # even if the server was started from a different directory.
-    if cwd:
-        prompt = f'**Working directory:** `{cwd}`\n\n' + prompt
 
     # Write prompt to file (background process reads it)
     write_status(cwd, task_id, 'PENDING')  # also creates tasks dir
