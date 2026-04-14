@@ -29,7 +29,7 @@ def test_build_tui_section_returns_toggle():
     assert len(result) == 1
     assert result[0]["type"] == "toggle"
     assert result[0]["label"] == "Codebase-Memory MCP"
-    assert result[0]["key"] == "enabled"
+    assert result[0]["key"] == "codebase-memory_mcp:enabled"
     assert result[0]["group"] == "master"
 
 
@@ -73,4 +73,11 @@ def test_build_mcp_entries_returns_server_config():
 def test_build_mcp_entries_returns_empty_when_binary_missing():
     with patch("shutil.which", return_value=None):
         result = module.build_mcp_entries({}, {"enabled": True})
+    assert result == []
+
+
+def test_build_mcp_entries_returns_empty_when_disabled():
+    with patch("shutil.which", return_value="/usr/local/bin/codebase-memory-mcp"):
+        result = module.build_mcp_entries({}, {"enabled": False})
+
     assert result == []

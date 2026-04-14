@@ -1,7 +1,6 @@
 """Tests for launcher module."""
 
-import pytest
-from launcher.launcher import collect_mcp_entries
+from launcher.launcher import collect_mcp_entries, selections_to_module_state
 
 
 class MockModuleWithMCP:
@@ -70,3 +69,17 @@ def test_collect_mcp_entries_handles_multiple_servers():
     assert "mcp-b" in result
     assert result["mcp-a"]["command"] == "/bin/a"
     assert result["mcp-b"]["type"] == "http"
+
+
+def test_selections_to_module_state_handles_prefixed_keys():
+    """Test that module-scoped keys are correctly parsed."""
+    all_items = [
+        {"type": "toggle", "key": "memory_system:enabled", "module_name": "Memory System", "default": True},
+        {"type": "toggle", "key": "codebase-memory_mcp:enabled", "module_name": "Codebase-Memory MCP", "default": True},
+    ]
+    selections = {"memory_system:enabled": True, "codebase-memory_mcp:enabled": False}
+
+    result = selections_to_module_state(selections, all_items)
+
+    assert result["memory_system"]["enabled"] is True
+    assert result["codebase-memory_mcp"]["enabled"] is False

@@ -192,7 +192,14 @@ def selections_to_module_state(selections: dict, all_items: list) -> dict:
         key = item["key"]
         selected = selections.get(key, item.get("default", True))
 
-        if key == "enabled":
+        # Handle module-scoped keys like "module_name:enabled"
+        if ":" in key and not key.startswith("file:"):
+            _, actual_key = key.split(":", 1)
+            if actual_key == "enabled":
+                module_states[mod_key]["enabled"] = selected
+            else:
+                module_states[mod_key][actual_key] = selected
+        elif key == "enabled":
             module_states[mod_key]["enabled"] = selected
         elif key.startswith("file:"):
             if "selected_files" not in module_states[mod_key]:

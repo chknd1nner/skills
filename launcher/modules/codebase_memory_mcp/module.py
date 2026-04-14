@@ -28,6 +28,9 @@ def check_dependencies(env: dict) -> dict:
 
 def build_mcp_entries(env: dict, selections: dict) -> list[dict]:
     """Return CBM MCP server entry."""
+    if not selections.get("enabled", True):
+        return []
+
     binary_path = shutil.which("codebase-memory-mcp")
     if not binary_path:
         return []
@@ -62,7 +65,7 @@ def build_tui_section(env: dict, saved_state: dict) -> list:
         {
             "type": "toggle",
             "label": "Codebase-Memory MCP",
-            "key": "enabled",
+            "key": "codebase-memory_mcp:enabled",
             "default": saved_state.get("enabled", True),
             "group": "master",
         }

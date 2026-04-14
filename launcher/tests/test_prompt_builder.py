@@ -2,7 +2,6 @@
 
 import json
 import os
-import pytest
 from launcher.prompt_builder import write_mcp_config
 
 
