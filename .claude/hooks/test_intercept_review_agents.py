@@ -1792,6 +1792,71 @@ profile = "review_gpt54"
     assert exc_info.value.code == 0
 
 
+def test_hook_blank_subagent_type_defaults_to_general_purpose(tmp_path, monkeypatch, capsys):
+    """Blank subagent_type is treated as general-purpose and can match a route."""
+    toml_content = """\
+version = 1
+
+[profiles.minimal]
+agent = "code-reviewer"
+
+[[routes]]
+name = "general-review-prefix"
+match_subagent = "general-purpose"
+match_description_prefix = "Review spec compliance"
+profile = "minimal"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    monkeypatch.setattr(_hook, '_CONFIG_PATH', path)
+    monkeypatch.setattr(_hook, 'resolve_port', lambda _cwd: (9999, 'env'))
+    monkeypatch.setattr(_hook, 'ensure_server', lambda port, startup_timeout, password=None, cwd=None: (True, ''))
+    monkeypatch.setattr(_hook, 'create_session', lambda port, password=None, directory=None: 'fake-session')
+    monkeypatch.setenv('OPENCODE_PORT', '9999')
+    monkeypatch.setenv('OPENCODE_SKIP_POLLER', '1')
+
+    import io
+    payload = make_payload('', 'Review spec compliance for Task 1', cwd=str(tmp_path / 'project'))
+    monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps(payload)))
+
+    _hook.main()
+
+    output = json.loads(capsys.readouterr().out)
+    assert output['hookSpecificOutput']['permissionDecision'] == 'deny'
+
+
+def test_hook_missing_subagent_type_defaults_to_general_purpose(tmp_path, monkeypatch, capsys):
+    """Missing subagent_type key is treated as general-purpose and can match a route."""
+    toml_content = """\
+version = 1
+
+[profiles.minimal]
+agent = "code-reviewer"
+
+[[routes]]
+name = "general-review-prefix"
+match_subagent = "general-purpose"
+match_description_prefix = "Review spec compliance"
+profile = "minimal"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    monkeypatch.setattr(_hook, '_CONFIG_PATH', path)
+    monkeypatch.setattr(_hook, 'resolve_port', lambda _cwd: (9999, 'env'))
+    monkeypatch.setattr(_hook, 'ensure_server', lambda port, startup_timeout, password=None, cwd=None: (True, ''))
+    monkeypatch.setattr(_hook, 'create_session', lambda port, password=None, directory=None: 'fake-session')
+    monkeypatch.setenv('OPENCODE_PORT', '9999')
+    monkeypatch.setenv('OPENCODE_SKIP_POLLER', '1')
+
+    import io
+    payload = make_payload('general-purpose', 'Review spec compliance for Task 1', cwd=str(tmp_path / 'project'))
+    del payload['tool_input']['subagent_type']
+    monkeypatch.setattr('sys.stdin', io.StringIO(json.dumps(payload)))
+
+    _hook.main()
+
+    output = json.loads(capsys.readouterr().out)
+    assert output['hookSpecificOutput']['permissionDecision'] == 'deny'
+
+
 # ---------------------------------------------------------------------------
 # Payload shape — agent + model dispatch
 # ---------------------------------------------------------------------------
