@@ -41,3 +41,18 @@ def test_build_tui_section_respects_saved_state():
 def test_build_tui_section_defaults_to_enabled():
     result = module.build_tui_section({}, {})
     assert result[0]["default"] is True
+
+
+def test_build_prompt_returns_content_with_references_path():
+    result = module.build_prompt({}, {"enabled": True})
+
+    assert "Code Discovery Protocol" in result
+    assert "Quick Decision Matrix" in result
+    assert "{{REFERENCES_PATH}}" not in result  # Should be replaced
+    assert "references" in result  # Should have real path
+
+
+def test_build_prompt_returns_empty_when_no_prompt_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(module, "PROMPTS_DIR", tmp_path)
+    result = module.build_prompt({}, {"enabled": True})
+    assert result == ""

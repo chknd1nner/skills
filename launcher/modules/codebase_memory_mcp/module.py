@@ -26,6 +26,19 @@ def check_dependencies(env: dict) -> dict:
     }
 
 
+def build_prompt(env: dict, selections: dict) -> str:
+    """Return code discovery prompt with absolute path to references."""
+    prompt_file = PROMPTS_DIR / "code-discovery.md"
+    if not prompt_file.exists():
+        return ""
+
+    content = prompt_file.read_text()
+    references_path = str(REFERENCES_DIR.resolve())
+    content = content.replace("{{REFERENCES_PATH}}", references_path)
+
+    return content
+
+
 def build_tui_section(env: dict, saved_state: dict) -> list:
     """Return TUI items — single enable toggle."""
     return [
