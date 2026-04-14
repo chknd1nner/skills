@@ -56,3 +56,21 @@ def test_build_prompt_returns_empty_when_no_prompt_file(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "PROMPTS_DIR", tmp_path)
     result = module.build_prompt({}, {"enabled": True})
     assert result == ""
+
+
+def test_build_mcp_entries_returns_server_config():
+    with patch("shutil.which", return_value="/usr/local/bin/codebase-memory-mcp"):
+        result = module.build_mcp_entries({}, {"enabled": True})
+
+    assert len(result) == 1
+    assert result[0]["name"] == "codebase-memory-mcp"
+    assert result[0]["type"] == "stdio"
+    assert result[0]["command"] == "/usr/local/bin/codebase-memory-mcp"
+    assert result[0]["args"] == []
+    assert result[0]["env"] == {}
+
+
+def test_build_mcp_entries_returns_empty_when_binary_missing():
+    with patch("shutil.which", return_value=None):
+        result = module.build_mcp_entries({}, {"enabled": True})
+    assert result == []

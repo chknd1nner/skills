@@ -26,6 +26,23 @@ def check_dependencies(env: dict) -> dict:
     }
 
 
+def build_mcp_entries(env: dict, selections: dict) -> list[dict]:
+    """Return CBM MCP server entry."""
+    binary_path = shutil.which("codebase-memory-mcp")
+    if not binary_path:
+        return []
+
+    return [
+        {
+            "name": "codebase-memory-mcp",
+            "type": "stdio",
+            "command": binary_path,
+            "args": [],
+            "env": {},
+        }
+    ]
+
+
 def build_prompt(env: dict, selections: dict) -> str:
     """Return code discovery prompt with absolute path to references."""
     prompt_file = PROMPTS_DIR / "code-discovery.md"
