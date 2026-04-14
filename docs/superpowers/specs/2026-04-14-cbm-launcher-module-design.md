@@ -162,13 +162,13 @@ For detailed workflows, Cypher examples, and tool reference, see:
 
 ### Reference Files
 
-**references/workflows.md** — Exploration and tracing workflows from CBM skill
+Content sourced from the skill section in `launcher/cbm-hooks-reference.md`:
 
-**references/cypher-examples.md** — query_graph Cypher patterns
-
-**references/tool-reference.md** — All 14 tools, edge types, gotchas
-
-Content sourced from `launcher/cbm-hooks-reference.md` skill section.
+| File | Sections to include |
+|------|---------------------|
+| `workflows.md` | "Exploration Workflow", "Tracing Workflow", "Quality Analysis" |
+| `cypher-examples.md` | "Cypher Examples (for query_graph)" |
+| `tool-reference.md` | "14 MCP Tools", "Edge Types", "Gotchas" |
 
 ### Launcher Changes
 
@@ -224,6 +224,10 @@ if mcp_path:
 Add `write_mcp_config()` function:
 
 ```python
+import json
+import os
+import tempfile
+
 def write_mcp_config(config: dict) -> str:
     """Write MCP config to temp file, return path.
     
@@ -233,9 +237,6 @@ def write_mcp_config(config: dict) -> str:
     Returns:
         Path to temp JSON file
     """
-    import json
-    import tempfile
-    
     fd, path = tempfile.mkstemp(suffix=".json", prefix="claude-mcp-")
     with os.fdopen(fd, "w") as f:
         json.dump(config, f, indent=2)
