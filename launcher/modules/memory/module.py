@@ -106,11 +106,11 @@ def build_tui_section(env: dict, saved_state: dict) -> list:
     if not categories:
         return [{
             "type": "toggle", "label": "Enable memory system",
-            "key": "enabled", "default": saved_state.get("enabled", True), "group": "master",
+            "key": "memory_system:enabled", "default": saved_state.get("enabled", True), "group": "master",
         }]
 
     items = []
-    items.append({"type": "toggle", "label": "Enable memory system", "key": "enabled",
+    items.append({"type": "toggle", "label": "Enable memory system", "key": "memory_system:enabled",
                    "default": saved_state.get("enabled", True), "group": "master"})
     items.append({"type": "separator", "label": "Core Files"})
 

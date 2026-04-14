@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from launcher.config import parse_env, load_state, save_state
-from launcher.prompt_builder import assemble_prompt
+from launcher.prompt_builder import assemble_prompt, write_mcp_config
 
 MODULES_DIR = Path(__file__).parent / "modules"
 STATE_FILENAME = ".claude-launcher-state.json"
@@ -92,10 +92,12 @@ def discover_modules(env: dict) -> list:
 
             result = mod.check_dependencies(env)
             if result.get("available"):
-                available.append({
-                    "name": result["name"],
-                    "module": mod,
-                })
+                available.append(
+                    {
+                        "name": result["name"],
+                        "module": mod,
+                    }
+                )
         except Exception:
             continue
 
@@ -190,7 +192,14 @@ def selections_to_module_state(selections: dict, all_items: list) -> dict:
         key = item["key"]
         selected = selections.get(key, item.get("default", True))
 
-        if key == "enabled":
+        # Handle module-scoped keys like "module_name:enabled"
+        if ":" in key and not key.startswith("file:"):
+            _, actual_key = key.split(":", 1)
+            if actual_key == "enabled":
+                module_states[mod_key]["enabled"] = selected
+            else:
+                module_states[mod_key][actual_key] = selected
+        elif key == "enabled":
             module_states[mod_key]["enabled"] = selected
         elif key.startswith("file:"):
             if "selected_files" not in module_states[mod_key]:
@@ -201,6 +210,33 @@ def selections_to_module_state(selections: dict, all_items: list) -> dict:
             module_states[mod_key][key] = selected
 
     return module_states
+
+
+def collect_mcp_entries(modules: list, module_states: dict, env: dict) -> dict:
+    """Collect MCP server entries from all enabled modules.
+
+    Returns dict in mcpServers format: {"server-name": {config...}, ...}
+    """
+    mcp_servers = {}
+    for mod_info in modules:
+        mod = mod_info["module"]
+        mod_key = mod_info["name"].lower().replace(" ", "_")
+        mod_state = module_states.get(mod_key, {})
+
+        if not mod_state.get("enabled", False):
+            continue
+
+        if hasattr(mod, "build_mcp_entries"):
+            try:
+                entries = mod.build_mcp_entries(env, mod_state)
+                for entry in entries:
+                    entry = entry.copy()  # Don't mutate original
+                    name = entry.pop("name")
+                    mcp_servers[name] = entry
+            except Exception as e:
+                print(f"Warning: {mod_info['name']} failed to build MCP entries: {e}")
+
+    return mcp_servers
 
 
 def main():
@@ -251,19 +287,35 @@ def main():
             except Exception as e:
                 print(f"Warning: {mod_info['name']} failed to build prompt: {e}")
 
-    # Step 6: Parse user flags
+    # Step 6: Collect MCP entries from enabled modules
+    mcp_servers = collect_mcp_entries(modules, module_states, env)
+
+    # Step 7: Parse user flags
     args = parse_args(sys.argv[1:])
 
-    # Step 7: Assemble system prompt
+    # Step 8: Assemble system prompt
     prompt_path = assemble_prompt(fragments, args["user_appends"])
 
-    # Step 8: Launch claude
+    # Step 9: Write MCP config if any modules contributed servers
+    mcp_path = None
+    if mcp_servers:
+        mcp_path = write_mcp_config({"mcpServers": mcp_servers})
+
+    # Step 10: Launch claude
     claude_args = ["claude"]
     if prompt_path:
         claude_args.extend(["--append-system-prompt-file", prompt_path])
+    if mcp_path:
+        claude_args.extend(["--mcp-config", mcp_path])
     claude_args.extend(args["passthrough"])
 
-    print(f"Launching claude with {len(fragments)} module(s)...")
+    mcp_count = len(mcp_servers)
+    if mcp_count:
+        print(
+            f"Launching claude with {len(fragments)} module(s), {mcp_count} MCP server(s)..."
+        )
+    else:
+        print(f"Launching claude with {len(fragments)} module(s)...")
     os.execvp("claude", claude_args)
 
 
