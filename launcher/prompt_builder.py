@@ -67,3 +67,51 @@ def write_mcp_config(config: dict) -> str:
         json.dump(config, f, indent=2)
 
     return path
+
+
+def write_settings_config(config: dict) -> str:
+    """Write settings fragment to temp file, return path.
+
+    Args:
+        config: settings.json-shaped dict (e.g. with 'hooks' key)
+
+    Returns:
+        Path to temp JSON file
+    """
+    fd, path = tempfile.mkstemp(suffix=".json", prefix="claude-settings-")
+    with os.fdopen(fd, "w") as f:
+        json.dump(config, f, indent=2)
+
+    return path
+
+
+def merge_settings(settings_list: list[dict]) -> dict:
+    """Deep merge a list of settings dicts.
+
+    Dicts are recursively merged. Lists are concatenated.
+    Scalar conflicts: later value wins.
+
+    Args:
+        settings_list: list of settings fragments from modules
+
+    Returns:
+        Single merged settings dict
+    """
+    merged: dict = {}
+    for settings in settings_list:
+        _deep_merge(merged, settings)
+    return merged
+
+
+def _deep_merge(base: dict, overlay: dict) -> None:
+    """Mutate base by merging overlay into it."""
+    for key, value in overlay.items():
+        if key in base:
+            if isinstance(base[key], dict) and isinstance(value, dict):
+                _deep_merge(base[key], value)
+            elif isinstance(base[key], list) and isinstance(value, list):
+                base[key].extend(value)
+            else:
+                base[key] = value
+        else:
+            base[key] = value
