@@ -353,10 +353,10 @@ def main():
     mcp_count = len(mcp_servers)
     hook_count = len(hooks_fragments)
     if mcp_count or hook_count:
-        print(
-            f"Launching claude with {len(fragments)} module(s), "
-            f"{mcp_count} MCP server(s), {hook_count} hook fragment(s)..."
-        )
+        parts = [f"{len(fragments)} module(s)", f"{mcp_count} MCP server(s)"]
+        if hook_count:
+            parts.append(f"{hook_count} hook fragment(s)")
+        print(f"Launching claude with {', '.join(parts)}...")
     else:
         print(f"Launching claude with {len(fragments)} module(s)...")
     os.execvp("claude", claude_args)
