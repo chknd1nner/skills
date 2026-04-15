@@ -77,9 +77,9 @@ Both work; having only one is cleaner.
 }
 ```
 
-The `matcher` is a `|`-separated Claude Code tool-name regex. Note the
-`Search` token — that's not a real Claude Code tool name, so it's a dead
-match. Effective matchers are `Grep`, `Glob`, `Read`.
+The `matcher` is a `|`-separated Claude Code tool-name regex. `Search`
+is a real Claude Code tool (handles both glob-pattern file search and
+content search). Effective matchers are `Grep`, `Glob`, `Read`, `Search`.
 
 **Script contents** at `~/.claude/hooks/cbm-code-discovery-gate`:
 
@@ -110,9 +110,8 @@ stderr is the nudge channel.
 
 **Known weaknesses of this hook design:**
 - `$PPID` can be unstable in some shell chains — if the PPID resolution drifts, the marker misses and the block fires twice.
-- The `find /tmp -name ... -delete` runs on every tool call — cheap but not free. On a slow /tmp this adds latency per Grep/Glob/Read.
+- The `find /tmp -name ... -delete` runs on every tool call — cheap but not free. On a slow /tmp this adds latency per Grep/Glob/Read/Search.
 - No awareness of whether a project is actually indexed. If you run `claude` in a fresh, unindexed repo, the first block still fires and tells you to `index_repository` first.
-- The `Search` token in the matcher is a bug — it matches no real tool.
 
 ---
 

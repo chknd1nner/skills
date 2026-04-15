@@ -752,8 +752,9 @@ def main() -> None:
         'If it says FAILED, re-invoke the original agent call with [BYPASS_HOOK] '
         'prepended to the description field \u2014 the hook will let it through to the '
         'Claude agent this time.\n\n'
-        'The task typically takes 30\u201360 seconds. Continue with your current work '
-        'and check back after completing your next task.'
+        'The task typically takes 2\u201315 minutes (simple tasks: ~2 min; '
+        'implementation tasks and code reviews: 5\u201315 min). '
+        'Check back after a few minutes.'
     )
 
     response = {
