@@ -107,3 +107,35 @@ def test_build_hooks_gate_script_is_executable():
 def test_build_hooks_returns_empty_when_disabled():
     result = module.build_hooks({}, {"enabled": False})
     assert result == {}
+
+
+def test_build_hooks_returns_empty_when_gate_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(module, "HOOKS_DIR", tmp_path)
+    result = module.build_hooks({}, {"enabled": True})
+    assert result == {}
+
+
+def test_build_hooks_enabled_defaults_true_when_key_absent():
+    # selections without 'enabled' key should default to enabled
+    result = module.build_hooks({}, {})
+    # Should behave the same as {"enabled": True}
+    assert "hooks" in result
+
+
+def test_build_hooks_chmod_failure_does_not_raise(tmp_path, monkeypatch):
+    # Create a fake gate.sh in tmp_path
+    gate = tmp_path / "gate.sh"
+    gate.write_text("#!/bin/bash\nexit 0\n")
+    monkeypatch.setattr(module, "HOOKS_DIR", tmp_path)
+
+    # Mock os.chmod to raise PermissionError
+    original_chmod = os.chmod
+
+    def raising_chmod(path, mode):
+        raise PermissionError("read-only filesystem")
+
+    monkeypatch.setattr(os, "chmod", raising_chmod)
+
+    # Should not raise — just print a warning
+    result = module.build_hooks({}, {"enabled": True})
+    assert "hooks" in result

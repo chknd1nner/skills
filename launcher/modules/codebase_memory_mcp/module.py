@@ -55,10 +55,14 @@ def build_hooks(env: dict, selections: dict) -> dict:
 
     gate_script = HOOKS_DIR / "gate.sh"
     if not gate_script.exists():
+        print(f"Warning: CBM gate script not found at {gate_script} — hooks disabled")
         return {}
 
     # Ensure executable bit is set (git may not preserve it)
-    os.chmod(gate_script, 0o755)
+    try:
+        os.chmod(gate_script, 0o755)
+    except OSError as e:
+        print(f"Warning: could not set gate script executable: {e}")
 
     return {
         "hooks": {
