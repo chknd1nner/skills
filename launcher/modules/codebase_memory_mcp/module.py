@@ -53,6 +53,11 @@ def build_hooks(env: dict, selections: dict) -> dict:
     if not selections.get("enabled", True):
         return {}
 
+    # Guard: only emit hooks if the MCP binary is reachable — the gate nudges
+    # Claude toward tools that must actually be available
+    if not shutil.which("codebase-memory-mcp"):
+        return {}
+
     gate_script = HOOKS_DIR / "gate.sh"
     if not gate_script.exists():
         print(f"Warning: CBM gate script not found at {gate_script} — hooks disabled")
@@ -63,6 +68,8 @@ def build_hooks(env: dict, selections: dict) -> dict:
         os.chmod(gate_script, 0o755)
     except OSError as e:
         print(f"Warning: could not set gate script executable: {e}")
+        if not os.access(gate_script, os.X_OK):
+            return {}
 
     return {
         "hooks": {

@@ -123,9 +123,10 @@ def test_build_hooks_enabled_defaults_true_when_key_absent():
 
 
 def test_build_hooks_chmod_failure_does_not_raise(tmp_path, monkeypatch):
-    # Create a fake gate.sh in tmp_path
+    # Create a fake gate.sh in tmp_path that IS already executable
     gate = tmp_path / "gate.sh"
     gate.write_text("#!/bin/bash\nexit 0\n")
+    gate.chmod(0o755)  # already executable — chmod failure should not block hooks
     monkeypatch.setattr(module, "HOOKS_DIR", tmp_path)
 
     # Mock os.chmod to raise PermissionError
@@ -136,6 +137,31 @@ def test_build_hooks_chmod_failure_does_not_raise(tmp_path, monkeypatch):
 
     monkeypatch.setattr(os, "chmod", raising_chmod)
 
-    # Should not raise — just print a warning
+    # Should not raise — just print a warning; gate is already executable so hooks emitted
     result = module.build_hooks({}, {"enabled": True})
     assert "hooks" in result
+
+
+def test_build_hooks_returns_empty_when_binary_missing():
+    with patch("shutil.which", return_value=None):
+        result = module.build_hooks({}, {"enabled": True})
+    assert result == {}
+
+
+def test_build_hooks_returns_empty_when_chmod_fails_and_not_executable(
+    tmp_path, monkeypatch
+):
+    # Create a non-executable gate script
+    gate = tmp_path / "gate.sh"
+    gate.write_text("#!/bin/bash\nexit 0\n")
+    # Explicitly remove executable bit
+    gate.chmod(0o644)
+    monkeypatch.setattr(module, "HOOKS_DIR", tmp_path)
+
+    def raising_chmod(path, mode):
+        raise PermissionError("read-only filesystem")
+
+    monkeypatch.setattr(os, "chmod", raising_chmod)
+
+    result = module.build_hooks({}, {"enabled": True})
+    assert result == {}
