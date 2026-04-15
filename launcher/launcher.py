@@ -334,13 +334,16 @@ def main():
     if mcp_servers:
         mcp_path = write_mcp_config({"mcpServers": mcp_servers})
 
-    # Step 9b: Write settings config if any modules contributed hooks
+    # Step 9b: Write settings config if any modules contributed hooks.
+    # Note: if the user also passes --settings via argv it will appear in
+    # args["passthrough"] and both flags reach claude. Known limitation —
+    # merging user-supplied settings is not implemented (YAGNI).
     settings_path = None
     if hooks_fragments:
         settings_config = merge_settings(hooks_fragments)
         settings_path = write_settings_config(settings_config)
 
-    # Step 10: Launch claude
+    # Step 10: Launch claude (replaces this process via execvp — no cleanup possible)
     claude_args = ["claude"]
     if prompt_path:
         claude_args.extend(["--append-system-prompt-file", prompt_path])
@@ -350,13 +353,13 @@ def main():
         claude_args.extend(["--settings", settings_path])
     claude_args.extend(args["passthrough"])
 
-    mcp_count = len(mcp_servers)
-    hook_count = len(hooks_fragments)
-    if mcp_count or hook_count:
-        parts = [f"{len(fragments)} module(s)", f"{mcp_count} MCP server(s)"]
-        if hook_count:
-            parts.append(f"{hook_count} hook fragment(s)")
-        print(f"Launching claude with {', '.join(parts)}...")
+    extras = []
+    if len(mcp_servers):
+        extras.append(f"{len(mcp_servers)} MCP server(s)")
+    if settings_path:
+        extras.append("hooks")
+    if extras:
+        print(f"Launching claude with {len(fragments)} module(s), {', '.join(extras)}...")
     else:
         print(f"Launching claude with {len(fragments)} module(s)...")
     os.execvp("claude", claude_args)
