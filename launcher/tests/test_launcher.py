@@ -156,3 +156,34 @@ def test_collect_hooks_skips_empty_fragment():
     result = collect_hooks(modules, module_states, {})
 
     assert result == []
+
+
+class MockModuleWithRaisingHooks:
+    @staticmethod
+    def build_hooks(env, selections):
+        raise RuntimeError("hook build failed")
+
+
+def test_collect_hooks_swallows_module_exception():
+    modules = [{"name": "Bad Module", "module": MockModuleWithRaisingHooks}]
+    module_states = {"bad_module": {"enabled": True}}
+
+    result = collect_hooks(modules, module_states, {})
+
+    assert result == []
+
+
+def test_collect_hooks_aggregates_multiple_modules():
+    modules = [
+        {"name": "Module A", "module": MockModuleWithHooks},
+        {"name": "Module B", "module": MockModuleWithHooks},
+    ]
+    module_states = {
+        "module_a": {"enabled": True},
+        "module_b": {"enabled": True},
+    }
+
+    result = collect_hooks(modules, module_states, {})
+
+    assert len(result) == 2
+    assert all("hooks" in frag for frag in result)
