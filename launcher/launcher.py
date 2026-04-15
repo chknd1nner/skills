@@ -9,7 +9,12 @@ from pathlib import Path
 from typing import Optional
 
 from launcher.config import parse_env, load_state, save_state
-from launcher.prompt_builder import assemble_prompt, write_mcp_config
+from launcher.prompt_builder import (
+    assemble_prompt,
+    write_mcp_config,
+    write_settings_config,
+    merge_settings,
+)
 
 MODULES_DIR = Path(__file__).parent / "modules"
 STATE_FILENAME = ".claude-launcher-state.json"
@@ -315,6 +320,9 @@ def main():
     # Step 6: Collect MCP entries from enabled modules
     mcp_servers = collect_mcp_entries(modules, module_states, env)
 
+    # Step 6b: Collect hooks fragments from enabled modules
+    hooks_fragments = collect_hooks(modules, module_states, env)
+
     # Step 7: Parse user flags
     args = parse_args(sys.argv[1:])
 
@@ -326,18 +334,28 @@ def main():
     if mcp_servers:
         mcp_path = write_mcp_config({"mcpServers": mcp_servers})
 
+    # Step 9b: Write settings config if any modules contributed hooks
+    settings_path = None
+    if hooks_fragments:
+        settings_config = merge_settings(hooks_fragments)
+        settings_path = write_settings_config(settings_config)
+
     # Step 10: Launch claude
     claude_args = ["claude"]
     if prompt_path:
         claude_args.extend(["--append-system-prompt-file", prompt_path])
     if mcp_path:
         claude_args.extend(["--mcp-config", mcp_path])
+    if settings_path:
+        claude_args.extend(["--settings", settings_path])
     claude_args.extend(args["passthrough"])
 
     mcp_count = len(mcp_servers)
-    if mcp_count:
+    hook_count = len(hooks_fragments)
+    if mcp_count or hook_count:
         print(
-            f"Launching claude with {len(fragments)} module(s), {mcp_count} MCP server(s)..."
+            f"Launching claude with {len(fragments)} module(s), "
+            f"{mcp_count} MCP server(s), {hook_count} hook fragment(s)..."
         )
     else:
         print(f"Launching claude with {len(fragments)} module(s)...")
