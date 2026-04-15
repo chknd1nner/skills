@@ -239,6 +239,31 @@ def collect_mcp_entries(modules: list, module_states: dict, env: dict) -> dict:
     return mcp_servers
 
 
+def collect_hooks(modules: list, module_states: dict, env: dict) -> list[dict]:
+    """Collect settings fragments from all enabled modules.
+
+    Returns list of settings dicts (one per module), skipping empty ones.
+    """
+    fragments = []
+    for mod_info in modules:
+        mod = mod_info["module"]
+        mod_key = mod_info["name"].lower().replace(" ", "_")
+        mod_state = module_states.get(mod_key, {})
+
+        if not mod_state.get("enabled", False):
+            continue
+
+        if hasattr(mod, "build_hooks"):
+            try:
+                fragment = mod.build_hooks(env, mod_state)
+                if fragment:
+                    fragments.append(fragment)
+            except Exception as e:
+                print(f"Warning: {mod_info['name']} failed to build hooks: {e}")
+
+    return fragments
+
+
 def main():
     """Main entry point for the launcher."""
     # Step 1: Config discovery
