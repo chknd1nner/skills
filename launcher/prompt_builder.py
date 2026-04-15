@@ -1,5 +1,6 @@
 """Prompt builder — assembles module fragments into a temp file for --append-system-prompt-file."""
 
+import copy
 import json
 import os
 import tempfile
@@ -104,7 +105,7 @@ def merge_settings(settings_list: list[dict]) -> dict:
 
 
 def _deep_merge(base: dict, overlay: dict) -> None:
-    """Mutate base by merging overlay into it."""
+    """Mutate base by merging overlay into it. Does not mutate overlay."""
     for key, value in overlay.items():
         if key in base:
             if isinstance(base[key], dict) and isinstance(value, dict):
@@ -114,4 +115,4 @@ def _deep_merge(base: dict, overlay: dict) -> None:
             else:
                 base[key] = value
         else:
-            base[key] = value
+            base[key] = copy.deepcopy(value)

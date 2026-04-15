@@ -2,7 +2,11 @@
 
 import json
 import os
-from launcher.prompt_builder import write_mcp_config
+from launcher.prompt_builder import (
+    write_mcp_config,
+    write_settings_config,
+    merge_settings,
+)
 
 
 def test_write_mcp_config_creates_json_file():
@@ -40,11 +44,6 @@ def test_write_mcp_config_with_nested_config():
     os.unlink(path)
 
 
-import json
-import os
-from launcher.prompt_builder import write_settings_config, merge_settings
-
-
 def test_write_settings_config_creates_json_file():
     config = {"hooks": {"PreToolUse": [{"matcher": "Grep", "hooks": []}]}}
     path = write_settings_config(config)
@@ -75,6 +74,23 @@ def test_merge_settings_concatenates_lists():
     result = merge_settings([a, b])
 
     assert len(result["hooks"]["PreToolUse"]) == 2
+    assert result["hooks"]["PreToolUse"][0]["matcher"] == "Grep"
+    assert result["hooks"]["PreToolUse"][1]["matcher"] == "Glob"
+
+
+def test_merge_settings_does_not_mutate_inputs():
+    a = {"hooks": {"PreToolUse": [{"matcher": "Grep"}]}}
+    b = {"hooks": {"PreToolUse": [{"matcher": "Glob"}]}}
+    original_a_len = len(a["hooks"]["PreToolUse"])
+    merge_settings([a, b])
+    assert len(a["hooks"]["PreToolUse"]) == original_a_len
+
+
+def test_merge_settings_scalar_conflict_later_wins():
+    a = {"model": "sonnet"}
+    b = {"model": "opus"}
+    result = merge_settings([a, b])
+    assert result["model"] == "opus"
 
 
 def test_merge_settings_empty_list():
