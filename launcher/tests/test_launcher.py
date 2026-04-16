@@ -187,3 +187,137 @@ def test_collect_hooks_aggregates_multiple_modules():
 
     assert len(result) == 2
     assert all("hooks" in frag for frag in result)
+
+
+from unittest.mock import patch
+from launcher.launcher import run_tui
+
+
+def _toggle_item(key, default=True, label=None):
+    return {
+        "type": "toggle",
+        "key": key,
+        "label": label or key,
+        "default": default,
+        "module_name": "Test",
+        "group": "master",
+    }
+
+
+def _radio_item(key, options, default, requires_enabled=None, label="Mode"):
+    item = {
+        "type": "radio",
+        "key": key,
+        "label": label,
+        "options": options,
+        "default": default,
+        "group": "settings",
+        "module_name": "Test",
+    }
+    if requires_enabled is not None:
+        item["requires_enabled"] = requires_enabled
+    return item
+
+
+@patch("launcher.launcher._run_radio_stage")
+@patch("launcher.launcher._run_checkbox_stage")
+def test_run_tui_runs_radio_when_gate_true(mock_checkbox, mock_radio):
+    mock_checkbox.return_value = {"test:enabled": True}
+    mock_radio.return_value = "compact"
+    items = [
+        _toggle_item("test:enabled"),
+        _radio_item(
+            "test:mode",
+            options=[{"value": "off", "label": "Off"}, {"value": "compact", "label": "Compact"}],
+            default="off",
+            requires_enabled="test:enabled",
+        ),
+    ]
+
+    result = run_tui(items)
+
+    assert result["test:enabled"] is True
+    assert result["test:mode"] == "compact"
+    mock_radio.assert_called_once()
+
+
+@patch("launcher.launcher._run_radio_stage")
+@patch("launcher.launcher._run_checkbox_stage")
+def test_run_tui_skips_radio_when_gate_false(mock_checkbox, mock_radio):
+    mock_checkbox.return_value = {"test:enabled": False}
+    items = [
+        _toggle_item("test:enabled", default=False),
+        _radio_item(
+            "test:mode",
+            options=[{"value": "off", "label": "Off"}, {"value": "tdd", "label": "TDD"}],
+            default="tdd",
+            requires_enabled="test:enabled",
+        ),
+    ]
+
+    result = run_tui(items)
+
+    assert result["test:enabled"] is False
+    assert result["test:mode"] == "tdd"  # falls back to default, not prompted
+    mock_radio.assert_not_called()
+
+
+@patch("launcher.launcher._run_radio_stage")
+@patch("launcher.launcher._run_checkbox_stage")
+def test_run_tui_runs_radio_when_no_gate(mock_checkbox, mock_radio):
+    mock_checkbox.return_value = {}
+    mock_radio.return_value = "selected"
+    items = [
+        _radio_item(
+            "test:mode",
+            options=[{"value": "selected", "label": "Selected"}],
+            default="selected",
+        ),
+    ]
+
+    result = run_tui(items)
+
+    assert result["test:mode"] == "selected"
+    mock_radio.assert_called_once()
+
+
+@patch("launcher.launcher._run_radio_stage")
+@patch("launcher.launcher._run_checkbox_stage")
+def test_run_tui_passes_only_non_radio_to_checkbox_stage(mock_checkbox, mock_radio):
+    mock_checkbox.return_value = {"a:enabled": True}
+    mock_radio.return_value = "x"
+    items = [
+        _toggle_item("a:enabled"),
+        _radio_item(
+            "a:mode",
+            options=[{"value": "x", "label": "X"}],
+            default="x",
+            requires_enabled="a:enabled",
+        ),
+    ]
+
+    run_tui(items)
+
+    forwarded = mock_checkbox.call_args[0][0]
+    assert all(i.get("type") != "radio" for i in forwarded)
+    assert any(i["key"] == "a:enabled" for i in forwarded)
+
+
+@patch("launcher.launcher._run_radio_stage")
+@patch("InquirerPy.inquirer.checkbox")
+def test_run_tui_skips_checkbox_when_only_separators(mock_checkbox, mock_radio):
+    """Phase 1 should not render a checkbox if no toggle items are present."""
+    mock_radio.return_value = "default"
+    items = [
+        {"type": "separator", "label": "Settings", "module_name": "Test"},
+        _radio_item(
+            "test:mode",
+            options=[{"value": "default", "label": "Default"}],
+            default="default",
+        ),
+    ]
+
+    result = run_tui(items)
+
+    mock_checkbox.assert_not_called()
+    assert result["test:mode"] == "default"

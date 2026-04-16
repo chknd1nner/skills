@@ -135,23 +135,20 @@ def build_tui_choices(modules: list, env: dict, saved_state: dict) -> list:
     return all_items
 
 
-def run_tui(all_items: list) -> dict:
-    """Present the TUI and return user selections.
+def _run_checkbox_stage(items: list) -> dict:
+    """Run the checkbox prompt for toggle + separator items only.
 
-    Uses InquirerPy checkbox with separators for grouped flat list.
-
-    Args:
-        all_items: list of menu item dicts from build_tui_choices()
-
-    Returns:
-        dict mapping item keys to bool (selected or not)
+    Returns: {key: bool} for every non-separator item in `items`.
     """
     from InquirerPy import inquirer
     from InquirerPy.base.control import Choice
     from InquirerPy.separator import Separator
 
+    if not any(i.get("type") != "separator" for i in items):
+        return {}
+
     choices = []
-    for item in all_items:
+    for item in items:
         if item.get("type") == "separator":
             choices.append(Separator(f"── {item['label']} ──"))
         else:
@@ -172,15 +169,64 @@ def run_tui(all_items: list) -> dict:
         instruction="",
     ).execute()
 
-    all_keys = [item["key"] for item in all_items if item.get("type") != "separator"]
+    all_keys = [item["key"] for item in items if item.get("type") != "separator"]
     return {key: (key in selected) for key in all_keys}
+
+
+def _run_radio_stage(radio: dict) -> str:
+    """Prompt the user to pick one of the radio's options.
+
+    Returns the selected option's `value` (string).
+    """
+    from InquirerPy import inquirer
+    from InquirerPy.base.control import Choice
+
+    choices = [
+        Choice(value=opt["value"], name=opt["label"])
+        for opt in radio["options"]
+    ]
+    return inquirer.select(
+        message=f"{radio['label']}:",
+        choices=choices,
+        default=radio["default"],
+    ).execute()
+
+
+def run_tui(all_items: list) -> dict:
+    """Present the TUI in two phases and return user selections.
+
+    Phase 1: checkbox prompt for toggle + separator items.
+    Phase 2: one inquirer.select per radio item whose `requires_enabled`
+             gate (if present) resolves True in the phase-1 selections.
+             Skipped radios fall back to their `default`.
+
+    Args:
+        all_items: list of menu item dicts from build_tui_choices()
+
+    Returns:
+        dict mapping every non-separator item key to its value.
+        Toggle keys map to bool; radio keys map to str.
+    """
+    togglable = [i for i in all_items if i.get("type") != "radio"]
+    radios = [i for i in all_items if i.get("type") == "radio"]
+
+    selections = _run_checkbox_stage(togglable)
+
+    for radio in radios:
+        gate_key = radio.get("requires_enabled")
+        if gate_key and not selections.get(gate_key, False):
+            selections[radio["key"]] = radio["default"]
+            continue
+        selections[radio["key"]] = _run_radio_stage(radio)
+
+    return selections
 
 
 def selections_to_module_state(selections: dict, all_items: list) -> dict:
     """Convert flat TUI selections back to per-module state dicts.
 
     Args:
-        selections: flat dict of key -> bool from run_tui()
+        selections: flat dict of key -> value from run_tui() (bool for toggles, str for radios)
         all_items: the items list (with module_name attached)
 
     Returns:
