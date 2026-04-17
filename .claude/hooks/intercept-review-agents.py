@@ -744,17 +744,33 @@ def main() -> None:
 
     # Build and return deny response
     route_name = matched_route.get('name', 'unnamed')
+    profile_timeout = matched_profile.get('timeout_seconds') or 1800
+    monitor_timeout_ms = profile_timeout * 1000
+    status_file = os.path.join(cwd, '.opencode', 'tasks', f'{task_id}.status')
+    result_file = os.path.join(cwd, '.opencode', 'tasks', f'{task_id}.result.md')
+    progress_file = os.path.join(cwd, '.opencode', 'tasks', f'{task_id}.progress.md')
+    monitor_cmd = (
+        f"until grep -qE '^(COMPLETE|FAILED)$' {status_file} 2>/dev/null; "
+        f"do sleep 3; done; echo \"{task_id}: $(cat {status_file})\""
+    )
     reason = (
-        f'A PreToolUse hook dispatched this task to OpenCode Server (async, route: {route_name}). '
-        'The task is running in the background. When you\'re ready for the result, read '
-        f'`.opencode/tasks/{task_id}.status`. When it says COMPLETE, read '
-        f'`.opencode/tasks/{task_id}.result.md` and continue the workflow as normal. '
-        'If it says FAILED, re-invoke the original agent call with [BYPASS_HOOK] '
-        'prepended to the description field \u2014 the hook will let it through to the '
-        'Claude agent this time.\n\n'
-        'The task typically takes 2\u201315 minutes (simple tasks: ~2 min; '
-        'implementation tasks and code reviews: 5\u201315 min). '
-        'Check back after a few minutes.'
+        f'A PreToolUse hook dispatched this task to OpenCode Server (async, route: {route_name}, '
+        f'task id: {task_id}). The task is running in the background.\n\n'
+        'Launch a Monitor to wait for completion without blocking this turn:\n\n'
+        f'  command: {monitor_cmd}\n'
+        f'  timeout_ms: {monitor_timeout_ms}\n'
+        f'  description: await OpenCode task {task_id}\n\n'
+        'When the Monitor emits a line:\n'
+        f'  - "{task_id}: COMPLETE" \u2192 read {result_file} and continue the workflow as normal.\n'
+        f'  - "{task_id}: FAILED" \u2192 re-invoke the original agent call with [BYPASS_HOOK] '
+        'prepended to the description field; the hook will let it through to the Claude agent.\n\n'
+        'If the Monitor times out (no line emitted before the cap), the task ran over its budget. '
+        f'Read the last ~20 lines of {progress_file} and check its mtime. '
+        'If mtime is recent (<60s) and the transcript shows active tool calls, re-launch the same Monitor '
+        '(task is still making progress). If stale, surface to the user: ask whether to retry with '
+        '[BYPASS_HOOK] or abandon the task.\n\n'
+        'Within-turn Monitor waits are cache-free in Claude Code (1h TTL, measured from turn end), '
+        'so set the full budget \u2014 do not shorten it to manage cache cost.'
     )
 
     response = {
