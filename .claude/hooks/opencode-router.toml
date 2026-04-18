@@ -5,14 +5,14 @@ startup_timeout_seconds = 10
 
 [profiles.review_gpt54]
 agent = "plan"
-provider = "poe"
-model = "openai/gpt-5.4"
+provider = "github-copilot"
+model = "gpt-5.4"
 timeout_seconds = 3600
 
 [profiles.implementer_sonnet]
 agent = "build"
-provider = "poe"
-model = "anthropic/claude-sonnet-4.6"
+provider = "github-copilot"
+model = "claude-sonnet-4.6"
 timeout_seconds = 3600
 
 [[routes]]
@@ -39,4 +39,11 @@ name = "superpowers-implementer"
 enabled = true
 match_subagent = "general-purpose"
 match_description_prefix = "Implement task"
+profile = "implementer_sonnet"
+
+[[routes]]
+name = "superpowers-implementer2"
+enabled = true
+match_subagent = "general-purpose"
+match_description_prefix = "You are implementing"
 profile = "implementer_sonnet"
