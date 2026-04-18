@@ -1,8 +1,8 @@
 # lean-ctx: Dynamic Prompt & Hook Extraction
 
 **Date:** 2026-04-18  
-**Commit:** `bbaf0e5`  
-**Status:** Complete  
+**Commit:** `bbaf0e5` (+ follow-up fix)
+**Status:** Complete (with two corrections — see Correction sections below)
 
 ## Problem
 
@@ -50,3 +50,54 @@ Replace hardcoded artifacts with dynamic extraction from lean-ctx's own `setup` 
 - Rules injection: `inject_all_rules(&home)` writes `RULES_DEDICATED` (v9) to `$HOME/.claude/rules/lean-ctx.md`
 - Hooks injection: `install_claude_hook_config(&home)` writes both `rewrite` AND `redirect` PreToolUse hooks to `$HOME/.claude/settings.json`
 - Previous code only had the `Bash` rewrite hook; dynamic extraction now picks up the `Read|Grep|ListFiles` redirect hook automatically
+
+## Correction (2026-04-18, post-ship)
+
+### Faulty premise
+The original implementation called `lean-ctx setup` non-interactively, assuming it would write `.claude/rules/lean-ctx.md` and `.claude/settings.json`. It does not.
+
+Verified empirically against lean-ctx 3.2.3 in a fresh sandbox HOME with `stdin=DEVNULL`:
+
+| Command | Writes rules | Writes settings.json + hook scripts |
+|---------|:---:|:---:|
+| `lean-ctx setup` (non-interactive) | ❌ | ❌ |
+| `lean-ctx init --agent claude` | ✅ | ✅ |
+
+In non-interactive mode, `setup` runs only the shell-alias install step; the agent-install step (which produces the files the launcher reads) is silently skipped. `init --agent claude` is the command that actually performs the agent install and is documented as "Configure MCP for specific editor/agent".
+
+### Symptom
+Launcher emitted both warnings:
+- `Warning: lean-ctx setup did not produce a rules file; no prompt fragment injected`
+- `Warning: lean-ctx setup did not produce a settings file; no hooks injected`
+
+Pre-existing stale `rules/lean-ctx.md` in the sandbox (from earlier interactive runs) occasionally masked the rules half of the bug; `settings.json` was never produced so the hooks warning always fired on a fresh sandbox.
+
+### Fix
+`_run_lean_ctx_setup()` now invokes `[binary, "init", "--agent", "claude"]` instead of `[binary, "setup"]`. Everything else in the pipeline (sandbox HOME, idempotency flag, file reads, failure handling) is unchanged.
+
+### Verification
+- 41/41 lean-ctx module tests pass (test updated to assert the new argv)
+- End-to-end with sandbox `.claude/` wiped: `build_prompt()` returns 1467 chars, `build_hooks()` returns `{'hooks': {'PreToolUse': ...}}`
+
+## Second Correction (2026-04-18, post-ship)
+
+### Faulty premise
+The first correction switched from `setup` to `init --agent claude` on the assumption that the HOME override alone would contain all writes. It does not.
+
+`lean-ctx init --agent claude` writes **two categories** of files:
+
+| Category | Location | Sandboxed by `HOME=`? |
+|----------|----------|:---:|
+| Home-level rules/hooks | `$HOME/.claude/rules/lean-ctx.md`, `$HOME/.claude/settings.json`, `$HOME/.claude/hooks/` | ✅ |
+| Project-level agent files | `./AGENTS.md`, `./LEAN-CTX.md`, `./.cursorrules`, `./.claude/rules/lean-ctx.md` | ❌ — written to CWD |
+
+### Symptom
+Launching from the skills repo left four untracked artifacts scattered in the project root: `AGENTS.md`, `LEAN-CTX.md`, `.cursorrules`, and a fresh `.claude/rules/` directory. The sandbox caught the home-level writes but `subprocess.run` inherited the launcher's CWD, so init wrote project files into the repo instead.
+
+### Fix
+`_run_lean_ctx_setup()` now passes `cwd=str(sandbox_home)` to `subprocess.run`, so both categories of writes land inside the sandbox. Test updated to assert the new kwarg.
+
+### Verification
+- 41/41 lean-ctx module tests pass
+- Leaked files (`AGENTS.md`, `LEAN-CTX.md`, `.cursorrules`, `.claude/rules/`) removed from the repo
+- Prompt injection confirmed working end-to-end: the lean-ctx rules block appears in the session system prompt

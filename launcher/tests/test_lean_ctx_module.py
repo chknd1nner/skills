@@ -145,9 +145,15 @@ def test_run_lean_ctx_setup_calls_subprocess(tmp_path):
     assert result is True
     mock_run.assert_called_once()
     call_args = mock_run.call_args
-    assert call_args[0][0] == ["/usr/local/bin/lean-ctx", "setup"]
+    assert call_args[0][0] == [
+        "/usr/local/bin/lean-ctx",
+        "init",
+        "--agent",
+        "claude",
+    ]
     assert call_args[1]["stdin"] == subprocess.DEVNULL
     assert call_args[1]["env"]["HOME"] == str(sandbox)
+    assert call_args[1]["cwd"] == str(sandbox)
     assert call_args[1]["timeout"] == 30
 
 

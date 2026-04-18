@@ -119,18 +119,25 @@ def build_prompt(env: dict, selections: dict) -> str:
 
 
 def _run_lean_ctx_setup(sandbox_home: Path, binary_path: str) -> bool:
-    """Run ``lean-ctx setup`` non-interactively inside the sandbox HOME.
+    """Run ``lean-ctx init --agent claude`` non-interactively in the sandbox.
+
+    `lean-ctx setup` only installs shell aliases in non-interactive mode;
+    the agent-install step (which writes `.claude/rules/lean-ctx.md`,
+    `.claude/settings.json`, and the hook scripts) is skipped. `init
+    --agent claude` performs that step directly and is the command we
+    actually need.
 
     Returns True on success, False (with a warning) on failure.
     """
     env = {**os.environ, "HOME": str(sandbox_home)}
     try:
         subprocess.run(
-            [binary_path, "setup"],
+            [binary_path, "init", "--agent", "claude"],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=env,
+            cwd=str(sandbox_home),
             timeout=30,
         )
         return True
