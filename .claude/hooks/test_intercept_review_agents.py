@@ -1536,6 +1536,145 @@ routes = "not-an-array"
     assert cfg is None
 
 
+@pytest.mark.parametrize('level', ['low', 'medium', 'high', 'max', 'xhigh'])
+def test_config_thinking_valid_level_preserved(tmp_path, level):
+    """Profile with a valid thinking level keeps the field after normalization."""
+    toml_content = f"""\
+version = 1
+
+[profiles.p1]
+agent = "code-reviewer"
+thinking = "{level}"
+
+[[routes]]
+name = "r"
+match_subagent = "superpowers:code-reviewer"
+profile = "p1"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert cfg['profiles']['p1']['thinking'] == level
+
+
+def test_config_thinking_invalid_level_warns_and_strips(tmp_path, capsys):
+    """Profile with an unrecognized thinking level: stderr warning, field stripped, config still valid."""
+    toml_content = """\
+version = 1
+
+[profiles.p1]
+agent = "code-reviewer"
+thinking = "extreme"
+
+[[routes]]
+name = "r"
+match_subagent = "superpowers:code-reviewer"
+profile = "p1"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None, 'invalid thinking level must not fail the whole config'
+    assert cfg['profiles']['p1']['thinking'] is None
+    captured = capsys.readouterr()
+    assert 'extreme' in captured.err
+    assert "'p1'" in captured.err
+    assert 'low' in captured.err and 'xhigh' in captured.err
+
+
+@pytest.mark.parametrize('raw,normalized', [
+    ('High', 'high'),
+    ('MEDIUM', 'medium'),
+    ('xHigh', 'xhigh'),
+])
+def test_config_thinking_case_normalized_to_lower(tmp_path, raw, normalized):
+    """Mixed-case thinking values are normalized to lowercase and accepted."""
+    toml_content = f"""\
+version = 1
+
+[profiles.p1]
+agent = "code-reviewer"
+thinking = "{raw}"
+
+[[routes]]
+name = "r"
+match_subagent = "superpowers:code-reviewer"
+profile = "p1"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert cfg['profiles']['p1']['thinking'] == normalized
+
+
+def test_config_thinking_invalid_warning_uses_semantic_order(tmp_path, capsys):
+    """Warning lists valid levels in spec order: low | medium | high | max | xhigh."""
+    toml_content = """\
+version = 1
+
+[profiles.p1]
+agent = "code-reviewer"
+thinking = "extreme"
+
+[[routes]]
+name = "r"
+match_subagent = "superpowers:code-reviewer"
+profile = "p1"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    _hook.load_config(path)
+    captured = capsys.readouterr()
+    assert 'low | medium | high | max | xhigh' in captured.err
+
+
+@pytest.mark.parametrize('bad_value,representation', [
+    ('["high"]', "['high']"),
+    ('{level = "high"}', "{'level': 'high'}"),
+    ('42', '42'),
+    ('true', 'True'),
+])
+def test_config_thinking_non_string_warns_and_strips(tmp_path, capsys, bad_value, representation):
+    """Non-string thinking (array/table/number/bool) must warn-and-strip, not raise."""
+    toml_content = f"""\
+version = 1
+
+[profiles.p1]
+agent = "code-reviewer"
+thinking = {bad_value}
+
+[[routes]]
+name = "r"
+match_subagent = "superpowers:code-reviewer"
+profile = "p1"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None, 'non-string thinking must not crash config load'
+    assert cfg['profiles']['p1']['thinking'] is None
+    captured = capsys.readouterr()
+    assert representation in captured.err
+
+
+def test_config_thinking_absent_is_none(tmp_path, capsys):
+    """Profile without a thinking field: normalized value is None, no stderr warning."""
+    toml_content = """\
+version = 1
+
+[profiles.p1]
+agent = "code-reviewer"
+
+[[routes]]
+name = "r"
+match_subagent = "superpowers:code-reviewer"
+profile = "p1"
+"""
+    path = _write_toml(tmp_path, toml_content)
+    cfg = _hook.load_config(path)
+    assert cfg is not None
+    assert cfg['profiles']['p1']['thinking'] is None
+    captured = capsys.readouterr()
+    assert 'thinking' not in captured.err
+
+
 # ---------------------------------------------------------------------------
 # Route matching (find_matching_route)
 # ---------------------------------------------------------------------------
@@ -1930,6 +2069,68 @@ def test_payload_model_omitted_when_agent_only(fake_opencode, tmp_path):
     assert body['agent'] == 'code-reviewer'
     assert 'model' not in body
     assert 'modelID' not in body
+
+
+_THINKING_TOML = """\
+version = 1
+
+[profiles.review_gpt54]
+agent = "code-reviewer"
+provider = "poe"
+model = "openai/gpt-5.4"
+thinking = "high"
+
+[[routes]]
+name = "test-route"
+match_subagent = "superpowers:code-reviewer"
+profile = "review_gpt54"
+"""
+
+
+def test_payload_variant_sent_when_thinking_set(fake_opencode, tmp_path):
+    """Profile with thinking='high' → POST body includes variant='high'."""
+    server = fake_opencode(session_id='sess-var', result_text='Ok.')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _THINKING_TOML)
+    _hook.write_status(cwd, 'var-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'var-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-var',
+        task_id='var-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='review_gpt54',
+    )
+    msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
+    assert len(msg_reqs) == 1
+    body = msg_reqs[0]['body']
+    assert body['variant'] == 'high'
+
+
+def test_payload_variant_omitted_when_thinking_absent(fake_opencode, tmp_path):
+    """Profile without thinking → POST body has no variant field."""
+    server = fake_opencode(session_id='sess-novar', result_text='Ok.')
+    cwd = str(tmp_path / 'project')
+    config_path = _write_toml(tmp_path, _FULL_PROFILE_TOML)  # no thinking field
+    _hook.write_status(cwd, 'novar-test', 'PENDING')
+    (tmp_path / 'project' / '.opencode' / 'tasks' / 'novar-test.prompt').write_text('Review this.')
+
+    run_poller(
+        session_id='sess-novar',
+        task_id='novar-test',
+        port=server.port,
+        cwd=cwd,
+        env={'OPENCODE_TIMEOUT': '10'},
+        config_path=config_path,
+        profile_name='review_gpt54',
+    )
+    msg_reqs = [r for r in server.requests if '/message' in r['path'] and r['method'] == 'POST']
+    assert len(msg_reqs) == 1
+    body = msg_reqs[0]['body']
+    assert 'variant' not in body
 
 
 # ---------------------------------------------------------------------------

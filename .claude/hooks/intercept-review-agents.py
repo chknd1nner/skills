@@ -147,6 +147,10 @@ def _config_error(msg: str) -> None:
     print(f'OpenCode hook config error: {msg}', file=sys.stderr)
 
 
+THINKING_LEVELS_ORDERED = ('low', 'medium', 'high', 'max', 'xhigh')
+ALLOWED_THINKING_LEVELS = frozenset(THINKING_LEVELS_ORDERED)
+
+
 def _validate_profiles(profiles: dict) -> list[str]:
     """Validate profile definitions.  Returns a list of error strings (empty = valid)."""
     errors: list[str] = []
@@ -183,10 +187,23 @@ def _normalize_config(raw: dict) -> dict:
 
     profiles: dict = {}
     for name, prof in raw.get('profiles', {}).items():
+        raw_thinking = prof.get('thinking')
+        thinking: str | None = None
+        if isinstance(raw_thinking, str) and raw_thinking.lower() in ALLOWED_THINKING_LEVELS:
+            thinking = raw_thinking.lower()
+        elif raw_thinking is not None:
+            valid = ' | '.join(THINKING_LEVELS_ORDERED)
+            print(
+                f"WARN: unknown thinking level {raw_thinking!r} in profile {name!r} — ignoring.\n"
+                f"      Valid: {valid}\n"
+                f"      (absent = no thinking variant sent)",
+                file=sys.stderr,
+            )
         profiles[name] = {
             'agent': prof['agent'],
             'provider': prof.get('provider'),
             'model': prof.get('model'),
+            'thinking': thinking,
             'timeout_seconds': prof.get('timeout_seconds'),
         }
 
@@ -578,6 +595,8 @@ def run_background_process(
             'providerID': profile['provider'],
             'modelID': profile['model'],
         }
+    if profile.get('thinking'):
+        body['variant'] = profile['thinking']
     data = json.dumps(body).encode()
     req = Request(url, data=data, headers={'Content-Type': 'application/json'})
     if password:

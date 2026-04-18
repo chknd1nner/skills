@@ -31,7 +31,7 @@ thinking = "high"
 timeout_seconds = 3600
 ```
 
-Valid values: `low`, `medium`, `high`, `max`, `xhigh`. Absent = the field is omitted from the request body (current behavior preserved).
+Valid values: `low`, `medium`, `high`, `max`, `xhigh`. Absent = the field is omitted from the request body (current behavior preserved). Case is normalized to lowercase before validation — `"High"`, `"HIGH"`, and `"high"` all accepted.
 
 ### Validation behavior
 
@@ -95,6 +95,10 @@ Extend `.claude/hooks/test_intercept_review_agents.py`:
 - **Model-family-aware validation** (e.g. reject `xhigh` for `claude-sonnet-4.6`). The allowed set is the hook's single source of truth; model-family compatibility is OpenCode's responsibility.
 - **Warning de-spamming.** One stderr line per dispatch is acceptable.
 - **xhigh for Opus 4.7.** Included in the allowed set anticipatorily, but OpenCode may not route it correctly until a future version integrates it. User is aware.
+
+## Adopted live (in-scope expansion)
+
+The initial plan scoped the `opencode-router.toml` edit as a manual post-merge step. During implementation the user directed adoption of `thinking = "high"` on the `review_gpt54` profile as part of the integration test (a live code-review dispatch through the modified hook), so the TOML change ships in this branch. This is a deliberate behavior change: every route resolving to `review_gpt54` (both `superpowers-code-review` and `superpowers-code-review-prefixed`) now requests high-effort thinking from the server. The `implementer_sonnet` profile remains unchanged.
 
 ## References
 
