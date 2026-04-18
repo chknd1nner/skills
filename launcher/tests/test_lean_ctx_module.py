@@ -1,9 +1,62 @@
 """Tests for lean-ctx MCP launcher module."""
 
+import json
 import os
+import subprocess
 from unittest.mock import patch
 
+import pytest
+
 from launcher.modules.lean_ctx_mcp import module
+
+
+# ---------------------------------------------------------------------------
+# Fixture: reset _setup_done between tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def reset_setup_done():
+    """Reset the module-level _setup_done flag before every test."""
+    module._setup_done = False
+    yield
+    module._setup_done = False
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _write_rules(sandbox, content="# lean-ctx rules v9\n"):
+    """Write a fake rules file into the sandbox."""
+    rules = sandbox / module._RULES_REL
+    rules.parent.mkdir(parents=True, exist_ok=True)
+    rules.write_text(content, encoding="utf-8")
+    return rules
+
+
+def _write_settings(sandbox, data):
+    """Write a fake settings.json into the sandbox."""
+    settings = sandbox / module._SETTINGS_REL
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps(data), encoding="utf-8")
+    return settings
+
+
+def _patch_sandbox(monkeypatch, tmp_path):
+    """Point SANDBOX_HOME at tmp_path/sandbox with a fake home."""
+    sandbox = tmp_path / "sandbox"
+    fake_home = tmp_path / "fake-home"
+    fake_home.mkdir()
+    monkeypatch.setattr(module, "SANDBOX_HOME", sandbox)
+    monkeypatch.setattr(module.Path, "home", classmethod(lambda cls: fake_home))
+    return sandbox
+
+
+# ---------------------------------------------------------------------------
+# check_dependencies
+# ---------------------------------------------------------------------------
 
 
 def test_check_dependencies_binary_found():
@@ -23,6 +76,11 @@ def test_check_dependencies_binary_not_found():
     assert result["name"] == "lean-ctx MCP"
     assert "not found on PATH" in result["reason"]
     assert "brew install lean-ctx" in result["reason"]
+
+
+# ---------------------------------------------------------------------------
+# build_tui_section
+# ---------------------------------------------------------------------------
 
 
 def test_build_tui_section_returns_toggle_separator_radio():
@@ -72,60 +130,151 @@ def test_build_tui_section_radio_default_tdd_when_unset():
     assert items[2]["default"] == "tdd"
 
 
-def test_build_prompt_returns_strong_language_when_enabled():
-    result = module.build_prompt({}, {"enabled": True})
-
-    assert "NEVER use" in result
-    assert "ALWAYS use" in result
-    assert "ctx_read" in result
-    assert "ctx_shell" in result
-    assert "CRITICAL" in result
+# ---------------------------------------------------------------------------
+# _run_lean_ctx_setup
+# ---------------------------------------------------------------------------
 
 
-def test_build_prompt_includes_modes_and_editing_sections():
-    result = module.build_prompt({}, {"enabled": True})
+def test_run_lean_ctx_setup_calls_subprocess(tmp_path):
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
 
-    assert "ctx_read Modes" in result
-    assert "signatures" in result
-    assert "File Editing" in result
-    assert "ctx_edit" in result
+    with patch("subprocess.run") as mock_run:
+        result = module._run_lean_ctx_setup(sandbox, "/usr/local/bin/lean-ctx")
+
+    assert result is True
+    mock_run.assert_called_once()
+    call_args = mock_run.call_args
+    assert call_args[0][0] == ["/usr/local/bin/lean-ctx", "setup"]
+    assert call_args[1]["stdin"] == subprocess.DEVNULL
+    assert call_args[1]["env"]["HOME"] == str(sandbox)
+    assert call_args[1]["timeout"] == 30
 
 
-def test_build_prompt_returns_empty_when_disabled():
+def test_run_lean_ctx_setup_returns_false_on_timeout(tmp_path):
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
+
+    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 30)):
+        result = module._run_lean_ctx_setup(sandbox, "/usr/local/bin/lean-ctx")
+
+    assert result is False
+
+
+def test_run_lean_ctx_setup_returns_false_on_os_error(tmp_path):
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
+
+    with patch("subprocess.run", side_effect=OSError("not found")):
+        result = module._run_lean_ctx_setup(sandbox, "/usr/local/bin/lean-ctx")
+
+    assert result is False
+
+
+# ---------------------------------------------------------------------------
+# _ensure_lean_ctx_setup
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_lean_ctx_setup_runs_once(tmp_path):
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
+
+    with patch.object(module, "_run_lean_ctx_setup", return_value=True) as mock:
+        module._ensure_lean_ctx_setup(sandbox, "/bin/lean-ctx")
+        module._ensure_lean_ctx_setup(sandbox, "/bin/lean-ctx")
+
+    mock.assert_called_once()
+    assert module._setup_done is True
+
+
+# ---------------------------------------------------------------------------
+# build_prompt
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_returns_rules_content(tmp_path, monkeypatch):
+    sandbox = _patch_sandbox(monkeypatch, tmp_path)
+    rules_text = "# lean-ctx v9 rules\nctx_read ctx_shell"
+    _write_rules(sandbox, rules_text)
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
+        result = module.build_prompt({}, {"enabled": True})
+
+    assert result == rules_text
+
+
+def test_build_prompt_returns_empty_when_disabled(tmp_path, monkeypatch):
+    _patch_sandbox(monkeypatch, tmp_path)
     result = module.build_prompt({}, {"enabled": False})
     assert result == ""
 
 
-def test_build_prompt_defaults_to_enabled_when_key_absent():
-    result = module.build_prompt({}, {})
-    assert "ctx_read" in result
+def test_build_prompt_defaults_to_enabled(tmp_path, monkeypatch):
+    sandbox = _patch_sandbox(monkeypatch, tmp_path)
+    _write_rules(sandbox, "rules content")
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
+        result = module.build_prompt({}, {})
+
+    assert result == "rules content"
 
 
-def test_build_prompt_returns_file_content_verbatim():
-    expected = (module.PROMPTS_DIR / "tool-preference.md").read_text(encoding="utf-8")
-    result = module.build_prompt({}, {"enabled": True})
-    assert result == expected
-
-
-def test_build_prompt_returns_empty_when_file_missing(tmp_path, monkeypatch):
-    monkeypatch.setattr(module, "PROMPTS_DIR", tmp_path)
-    result = module.build_prompt({}, {"enabled": True})
-    assert result == ""
-
-
-def test_build_prompt_returns_empty_when_path_is_directory(tmp_path, monkeypatch):
-    (tmp_path / "tool-preference.md").mkdir()
-    monkeypatch.setattr(module, "PROMPTS_DIR", tmp_path)
-    result = module.build_prompt({}, {"enabled": True})
-    assert result == ""
-
-
-def test_build_prompt_returns_empty_when_file_unreadable(tmp_path, monkeypatch):
-    (tmp_path / "tool-preference.md").write_text("content", encoding="utf-8")
-    monkeypatch.setattr(module, "PROMPTS_DIR", tmp_path)
-    with patch("pathlib.Path.read_text", side_effect=PermissionError("denied")):
+def test_build_prompt_returns_empty_when_binary_missing():
+    with patch("shutil.which", return_value=None):
         result = module.build_prompt({}, {"enabled": True})
     assert result == ""
+
+
+def test_build_prompt_returns_empty_when_rules_file_missing(tmp_path, monkeypatch):
+    _patch_sandbox(monkeypatch, tmp_path)
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
+        result = module.build_prompt({}, {"enabled": True})
+
+    assert result == ""
+
+
+def test_build_prompt_warns_when_rules_file_missing(tmp_path, monkeypatch, capsys):
+    _patch_sandbox(monkeypatch, tmp_path)
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
+        module.build_prompt({}, {"enabled": True})
+
+    assert "did not produce a rules file" in capsys.readouterr().err
+
+
+def test_build_prompt_warns_when_sandbox_unavailable(tmp_path, monkeypatch, capsys):
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir(parents=True)
+    (sandbox / ".lean-ctx").mkdir()  # block symlink creation
+    fake_home = tmp_path / "fake-home"
+    fake_home.mkdir()
+    monkeypatch.setattr(module, "SANDBOX_HOME", sandbox)
+    monkeypatch.setattr(module.Path, "home", classmethod(lambda cls: fake_home))
+
+    with patch("shutil.which", return_value="/usr/local/bin/lean-ctx"):
+        result = module.build_prompt({}, {"enabled": True})
+
+    assert result == ""
+    assert "sandbox unavailable" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# _ensure_sandbox_home
+# ---------------------------------------------------------------------------
 
 
 def test_ensure_sandbox_home_creates_dir_and_symlink(tmp_path, monkeypatch):
@@ -153,7 +302,7 @@ def test_ensure_sandbox_home_idempotent(tmp_path, monkeypatch):
     )
 
     module._ensure_sandbox_home()
-    result = module._ensure_sandbox_home()  # second call, no-op
+    result = module._ensure_sandbox_home()
 
     assert result == sandbox
     assert (sandbox / ".lean-ctx").is_symlink()
@@ -164,7 +313,6 @@ def test_ensure_sandbox_home_falls_back_when_non_symlink_blocks_path(
 ):
     sandbox = tmp_path / "sandbox"
     sandbox.mkdir(parents=True)
-    # Pre-place a directory (not a symlink) at .lean-ctx
     (sandbox / ".lean-ctx").mkdir()
 
     fake_home = tmp_path / "fake-home"
@@ -173,8 +321,7 @@ def test_ensure_sandbox_home_falls_back_when_non_symlink_blocks_path(
     monkeypatch.setattr(module.Path, "home", classmethod(lambda cls: fake_home))
 
     result = module._ensure_sandbox_home()
-
-    assert result == fake_home  # fallback to real HOME
+    assert result == fake_home
 
 
 def test_ensure_sandbox_home_falls_back_when_symlink_creation_fails(
@@ -190,10 +337,8 @@ def test_ensure_sandbox_home_falls_back_when_symlink_creation_fails(
         raise OSError("permission denied")
 
     monkeypatch.setattr(module.Path, "symlink_to", raising_symlink)
-
     result = module._ensure_sandbox_home()
-
-    assert result == fake_home  # fallback to real HOME
+    assert result == fake_home
 
 
 def test_ensure_sandbox_home_falls_back_when_mkdir_fails(tmp_path, monkeypatch):
@@ -207,10 +352,46 @@ def test_ensure_sandbox_home_falls_back_when_mkdir_fails(tmp_path, monkeypatch):
         raise OSError("read-only filesystem")
 
     monkeypatch.setattr(module.Path, "mkdir", raising_mkdir)
+    result = module._ensure_sandbox_home()
+    assert result == fake_home
+
+
+def test_ensure_sandbox_home_falls_back_when_symlink_points_elsewhere(
+    tmp_path, monkeypatch
+):
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir(parents=True)
+    (sandbox / ".lean-ctx").symlink_to(tmp_path / "wrong-target")
+
+    fake_home = tmp_path / "fake-home"
+    fake_home.mkdir()
+    monkeypatch.setattr(module, "SANDBOX_HOME", sandbox)
+    monkeypatch.setattr(module.Path, "home", classmethod(lambda cls: fake_home))
 
     result = module._ensure_sandbox_home()
+    assert result == fake_home
 
-    assert result == fake_home  # fallback to real HOME
+
+def test_ensure_sandbox_home_falls_back_when_readlink_fails(tmp_path, monkeypatch):
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir(parents=True)
+    (sandbox / ".lean-ctx").symlink_to(tmp_path / "whatever")
+
+    fake_home = tmp_path / "fake-home"
+    fake_home.mkdir()
+    monkeypatch.setattr(module, "SANDBOX_HOME", sandbox)
+    monkeypatch.setattr(module.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.setattr(
+        module.os, "readlink", lambda p: (_ for _ in ()).throw(FileNotFoundError(p))
+    )
+
+    result = module._ensure_sandbox_home()
+    assert result == fake_home
+
+
+# ---------------------------------------------------------------------------
+# build_mcp_entries
+# ---------------------------------------------------------------------------
 
 
 def test_build_mcp_entries_returns_server_with_env(tmp_path, monkeypatch):
@@ -259,14 +440,12 @@ def test_build_mcp_entries_falls_back_when_invalid_crp_mode(tmp_path, monkeypatc
 def test_build_mcp_entries_returns_empty_when_disabled():
     with patch("shutil.which", return_value="/usr/local/bin/lean-ctx"):
         result = module.build_mcp_entries({}, {"enabled": False})
-
     assert result == []
 
 
 def test_build_mcp_entries_returns_empty_when_binary_missing():
     with patch("shutil.which", return_value=None):
         result = module.build_mcp_entries({}, {"enabled": True, "crp_mode": "tdd"})
-
     assert result == []
 
 
@@ -282,92 +461,120 @@ def test_build_mcp_entries_defaults_to_enabled_when_key_absent(tmp_path, monkeyp
     assert len(result) == 1
 
 
-def test_build_hooks_returns_bash_rewrite_entry():
-    with patch("shutil.which", return_value="/usr/local/bin/lean-ctx"):
+# ---------------------------------------------------------------------------
+# build_hooks
+# ---------------------------------------------------------------------------
+
+
+def test_build_hooks_returns_extracted_hooks(tmp_path, monkeypatch):
+    sandbox = _patch_sandbox(monkeypatch, tmp_path)
+    hooks_data = {
+        "PreToolUse": [
+            {"matcher": "Bash|bash", "hooks": [{"type": "command", "command": "lean-ctx hook rewrite"}]},
+            {"matcher": "Read|Grep|ListFiles", "hooks": [{"type": "command", "command": "lean-ctx hook redirect"}]},
+        ]
+    }
+    _write_settings(sandbox, {"hooks": hooks_data})
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
         result = module.build_hooks({}, {"enabled": True})
 
-    assert "hooks" in result
-    assert "PreToolUse" in result["hooks"]
-    entries = result["hooks"]["PreToolUse"]
-    assert len(entries) == 1
-    assert entries[0]["matcher"] == "Bash"
-    inner = entries[0]["hooks"]
-    assert len(inner) == 1
-    assert inner[0]["type"] == "command"
-    assert inner[0]["command"] == "/usr/local/bin/lean-ctx hook rewrite"
+    assert result == {"hooks": hooks_data}
 
 
 def test_build_hooks_returns_empty_when_disabled():
     with patch("shutil.which", return_value="/usr/local/bin/lean-ctx"):
         result = module.build_hooks({}, {"enabled": False})
-
     assert result == {}
 
 
 def test_build_hooks_returns_empty_when_binary_missing():
     with patch("shutil.which", return_value=None):
         result = module.build_hooks({}, {"enabled": True})
+    assert result == {}
+
+
+def test_build_hooks_defaults_to_enabled(tmp_path, monkeypatch):
+    sandbox = _patch_sandbox(monkeypatch, tmp_path)
+    hooks_data = {"PreToolUse": [{"matcher": "Bash", "hooks": []}]}
+    _write_settings(sandbox, {"hooks": hooks_data})
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
+        result = module.build_hooks({}, {})
+
+    assert result == {"hooks": hooks_data}
+
+
+def test_build_hooks_returns_empty_when_settings_missing(tmp_path, monkeypatch):
+    _patch_sandbox(monkeypatch, tmp_path)
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
+        result = module.build_hooks({}, {"enabled": True})
 
     assert result == {}
 
 
-def test_build_hooks_defaults_to_enabled_when_key_absent():
-    with patch("shutil.which", return_value="/usr/local/bin/lean-ctx"):
-        result = module.build_hooks({}, {})
+def test_build_hooks_warns_when_settings_missing(tmp_path, monkeypatch, capsys):
+    _patch_sandbox(monkeypatch, tmp_path)
 
-    assert "hooks" in result
-    assert "PreToolUse" in result["hooks"]
-    entries = result["hooks"]["PreToolUse"]
-    assert len(entries) == 1
-    assert entries[0]["matcher"] == "Bash"
-    inner = entries[0]["hooks"]
-    assert len(inner) == 1
-    assert inner[0]["type"] == "command"
-    assert inner[0]["command"] == "/usr/local/bin/lean-ctx hook rewrite"
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
+        module.build_hooks({}, {"enabled": True})
+
+    assert "did not produce a settings file" in capsys.readouterr().err
 
 
-def test_ensure_sandbox_home_falls_back_when_symlink_points_elsewhere(
-    tmp_path, monkeypatch
-):
-    sandbox = tmp_path / "sandbox"
-    sandbox.mkdir(parents=True)
-    wrong_target = tmp_path / "wrong-target"
-    # Create a symlink pointing to the wrong place
-    (sandbox / ".lean-ctx").symlink_to(wrong_target)
+def test_build_hooks_returns_empty_when_settings_has_no_hooks(tmp_path, monkeypatch):
+    sandbox = _patch_sandbox(monkeypatch, tmp_path)
+    _write_settings(sandbox, {"other_key": "value"})
 
-    fake_home = tmp_path / "fake-home"
-    fake_home.mkdir()
-    monkeypatch.setattr(module, "SANDBOX_HOME", sandbox)
-    monkeypatch.setattr(module.Path, "home", classmethod(lambda cls: fake_home))
-
-    result = module._ensure_sandbox_home()
-
-    assert result == fake_home  # fallback because symlink target mismatches
-
-
-def test_ensure_sandbox_home_falls_back_when_readlink_fails(tmp_path, monkeypatch):
-    sandbox = tmp_path / "sandbox"
-    sandbox.mkdir(parents=True)
-    (sandbox / ".lean-ctx").symlink_to(tmp_path / "whatever")
-
-    fake_home = tmp_path / "fake-home"
-    fake_home.mkdir()
-    monkeypatch.setattr(module, "SANDBOX_HOME", sandbox)
-    monkeypatch.setattr(module.Path, "home", classmethod(lambda cls: fake_home))
-    # Simulate TOCTOU: symlink disappears between is_symlink() and os.readlink()
-    monkeypatch.setattr(
-        module.os, "readlink", lambda p: (_ for _ in ()).throw(FileNotFoundError(p))
-    )
-
-    result = module._ensure_sandbox_home()
-
-    assert result == fake_home  # fallback when readlink raises
-
-
-def test_build_hooks_quotes_binary_path_with_spaces():
-    with patch("shutil.which", return_value="/Applications/My Apps/lean-ctx"):
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
         result = module.build_hooks({}, {"enabled": True})
 
-    command = result["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
-    # The quoted binary path must appear as a single shell-safe token
-    assert command == "'/Applications/My Apps/lean-ctx' hook rewrite"
+    assert result == {}
+
+
+def test_build_hooks_returns_empty_on_invalid_json(tmp_path, monkeypatch, capsys):
+    sandbox = _patch_sandbox(monkeypatch, tmp_path)
+    settings = sandbox / module._SETTINGS_REL
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text("{invalid json", encoding="utf-8")
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/lean-ctx"),
+        patch.object(module, "_run_lean_ctx_setup", return_value=True),
+    ):
+        result = module.build_hooks({}, {"enabled": True})
+
+    assert result == {}
+    assert "could not read lean-ctx settings" in capsys.readouterr().err
+
+
+def test_build_hooks_warns_when_sandbox_unavailable(tmp_path, monkeypatch, capsys):
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir(parents=True)
+    (sandbox / ".lean-ctx").mkdir()  # block symlink
+    fake_home = tmp_path / "fake-home"
+    fake_home.mkdir()
+    monkeypatch.setattr(module, "SANDBOX_HOME", sandbox)
+    monkeypatch.setattr(module.Path, "home", classmethod(lambda cls: fake_home))
+
+    with patch("shutil.which", return_value="/usr/local/bin/lean-ctx"):
+        result = module.build_hooks({}, {"enabled": True})
+
+    assert result == {}
+    assert "sandbox unavailable" in capsys.readouterr().err

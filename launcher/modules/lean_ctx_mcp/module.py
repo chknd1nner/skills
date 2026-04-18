@@ -1,13 +1,11 @@
 """lean-ctx MCP module for the Claude Code launcher."""
 
+import json
 import os
-import shlex
 import shutil
+import subprocess
 import sys
 from pathlib import Path
-
-MODULE_DIR = Path(__file__).parent
-PROMPTS_DIR = MODULE_DIR / "prompts"
 
 VALID_CRP_MODES = ("off", "compact", "tdd")
 DEFAULT_CRP_MODE = "tdd"
@@ -16,6 +14,13 @@ DEFAULT_CRP_MODE = "tdd"
 # from writing to the real ~/.claude/CLAUDE.md. The .lean-ctx symlink preserves
 # lean-ctx's own state (cache, config, knowledge) across sessions.
 SANDBOX_HOME = Path.home() / ".cache" / "claude-launcher" / "lean-ctx-home"
+
+# Paths lean-ctx setup writes into (relative to HOME)
+_RULES_REL = Path(".claude") / "rules" / "lean-ctx.md"
+_SETTINGS_REL = Path(".claude") / "settings.json"
+
+# Module-level flag: run setup at most once per launcher invocation.
+_setup_done = False
 
 
 def check_dependencies(env: dict) -> dict:
@@ -76,19 +81,74 @@ def build_tui_section(env: dict, saved_state: dict) -> list:
 def build_prompt(env: dict, selections: dict) -> str:
     """Return the tool-preference system prompt fragment.
 
-    Returns empty string when the module is disabled or the prompt
-    file is missing, not a regular file, or unreadable.
+    Runs lean-ctx setup in the sandbox to generate rules, then reads the
+    generated rules file.  Returns empty string (with a warning) when
+    the module is disabled, setup fails, or the rules file is absent.
     """
     if not selections.get("enabled", True):
         return ""
 
-    prompt_file = PROMPTS_DIR / "tool-preference.md"
-    if not prompt_file.is_file():
+    binary_path = shutil.which("lean-ctx")
+    if not binary_path:
+        return ""
+
+    sandbox_home = _ensure_sandbox_home()
+    if sandbox_home == Path.home():
+        # Sandbox creation failed — don't run setup against real HOME.
+        print(
+            "Warning: lean-ctx sandbox unavailable; skipping prompt extraction",
+            file=sys.stderr,
+        )
+        return ""
+
+    _ensure_lean_ctx_setup(sandbox_home, binary_path)
+
+    rules_file = sandbox_home / _RULES_REL
+    if not rules_file.is_file():
+        print(
+            "Warning: lean-ctx setup did not produce a rules file; "
+            "no prompt fragment injected",
+            file=sys.stderr,
+        )
         return ""
     try:
-        return prompt_file.read_text(encoding="utf-8")
-    except OSError:
+        return rules_file.read_text(encoding="utf-8")
+    except OSError as e:
+        print(f"Warning: could not read lean-ctx rules file: {e}", file=sys.stderr)
         return ""
+
+
+def _run_lean_ctx_setup(sandbox_home: Path, binary_path: str) -> bool:
+    """Run ``lean-ctx setup`` non-interactively inside the sandbox HOME.
+
+    Returns True on success, False (with a warning) on failure.
+    """
+    env = {**os.environ, "HOME": str(sandbox_home)}
+    try:
+        subprocess.run(
+            [binary_path, "setup"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,
+            timeout=30,
+        )
+        return True
+    except subprocess.TimeoutExpired:
+        print("Warning: lean-ctx setup timed out", file=sys.stderr)
+        return False
+    except OSError as e:
+        print(f"Warning: lean-ctx setup failed: {e}", file=sys.stderr)
+        return False
+
+
+def _ensure_lean_ctx_setup(sandbox_home: Path, binary_path: str) -> None:
+    """Run lean-ctx setup at most once per launcher invocation."""
+    global _setup_done
+    if _setup_done:
+        return
+    _run_lean_ctx_setup(sandbox_home, binary_path)
+    _setup_done = True
 
 
 def _ensure_sandbox_home() -> Path:
@@ -173,13 +233,11 @@ def build_mcp_entries(env: dict, selections: dict) -> list[dict]:
 
 
 def build_hooks(env: dict, selections: dict) -> dict:
-    """Register lean-ctx's Bash-rewrite PreToolUse hook.
+    """Return hooks configuration extracted from lean-ctx setup output.
 
-    The hook invokes `<lean-ctx-binary> hook rewrite` which transforms
-    whitelisted Bash commands (git, cargo, npm, docker, etc.) into
-    `lean-ctx -c "<cmd>"` wrappers via updatedInput, so output is
-    transparently compressed. Returns empty dict when the module is
-    disabled or the binary is missing.
+    Runs lean-ctx setup in the sandbox (if not already done) and reads
+    the generated settings.json for hook definitions.  Returns empty
+    dict when the module is disabled, setup fails, or no hooks found.
     """
     if not selections.get("enabled", True):
         return {}
@@ -188,18 +246,31 @@ def build_hooks(env: dict, selections: dict) -> dict:
     if not binary_path:
         return {}
 
-    return {
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": f"{shlex.quote(binary_path)} hook rewrite",
-                        }
-                    ],
-                }
-            ]
-        }
-    }
+    sandbox_home = _ensure_sandbox_home()
+    if sandbox_home == Path.home():
+        print(
+            "Warning: lean-ctx sandbox unavailable; skipping hooks extraction",
+            file=sys.stderr,
+        )
+        return {}
+
+    _ensure_lean_ctx_setup(sandbox_home, binary_path)
+
+    settings_file = sandbox_home / _SETTINGS_REL
+    if not settings_file.is_file():
+        print(
+            "Warning: lean-ctx setup did not produce a settings file; "
+            "no hooks injected",
+            file=sys.stderr,
+        )
+        return {}
+    try:
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Warning: could not read lean-ctx settings: {e}", file=sys.stderr)
+        return {}
+
+    hooks = data.get("hooks")
+    if not hooks:
+        return {}
+    return {"hooks": hooks}
