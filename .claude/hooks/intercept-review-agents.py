@@ -768,9 +768,16 @@ def main() -> None:
     status_file = os.path.join(cwd, '.opencode', 'tasks', f'{task_id}.status')
     result_file = os.path.join(cwd, '.opencode', 'tasks', f'{task_id}.result.md')
     progress_file = os.path.join(cwd, '.opencode', 'tasks', f'{task_id}.progress.md')
+    # Use shell builtins only — external commands (grep, cat) get rewritten
+    # by lean-ctx's Bash hook into _lc calls that don't exist at runtime.
     monitor_cmd = (
-        f"until grep -qE '^(COMPLETE|FAILED)$' {status_file} 2>/dev/null; "
-        f"do sleep 3; done; echo \"{task_id}: $(cat {status_file})\""
+        f'while true; do '
+        f'if [[ -f {status_file} ]]; then '
+        f'read -r s < {status_file} 2>/dev/null; '
+        f'if [[ "$s" == "COMPLETE" || "$s" == "FAILED" ]]; then break; fi; '
+        f'fi; '
+        f'sleep 3; done; '
+        f'echo "{task_id}: $s"'
     )
     reason = (
         f'A PreToolUse hook dispatched this task to OpenCode Server (async, route: {route_name}, '
